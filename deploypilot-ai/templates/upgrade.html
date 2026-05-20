@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Upgrade Plan{% endblock %}
+{% block content %}
+<section class="py-12 px-4">
+  <div class="max-w-5xl mx-auto">
+    <div class="text-center mb-10">
+      <div class="inline-flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/30 rounded-full px-4 py-1.5 text-xs font-semibold text-cyan-400 mb-4">
+        <i class="bi bi-lightning-charge-fill"></i> Upgrade Your Plan
+      </div>
+      <h1 class="text-3xl font-bold text-white mb-3">Unlock Unlimited Scanning Power</h1>
+      <p class="text-gray-400 max-w-lg mx-auto">You're on the <span class="text-cyan-400 font-semibold">{{ current_user.plan|upper }}</span> plan. Upgrade to scan unlimited projects with full compliance reports.</p>
+    </div>
+
+    <!-- Current Plan Status -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-8 flex items-center justify-between flex-wrap gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
+          <i class="bi bi-person-circle text-gray-400 text-xl"></i>
+        </div>
+        <div>
+          <p class="text-white font-medium">{{ current_user.name }}</p>
+          <p class="text-xs text-gray-400">Current plan: <span class="text-cyan-400 font-semibold">{{ current_user.plan|capitalize }}</span> · {{ current_user.get_plan_limit('projects') }} projects max</p>
+        </div>
+      </div>
+      {% if current_user.plan != 'free' and current_user.plan_expires_at %}
+      <span class="text-xs text-green-400 bg-green-500/10 border border-green-500/30 px-3 py-1 rounded-full">
+        Active until {{ current_user.plan_expires_at.strftime('%b %d, %Y') }}
+      </span>
+      {% endif %}
+    </div>
+
+    <!-- Plan Cards -->
+    <div class="grid md:grid-cols-3 gap-6">
+      <!-- Pro Monthly -->
+      <div class="bg-gray-900 border-2 border-cyan-500/50 rounded-2xl p-7 relative">
+        <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-cyan-500 text-gray-900 text-xs font-bold px-4 py-1 rounded-full">RECOMMENDED</span>
+        <div class="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2">Pro Monthly</div>
+        <div class="text-4xl font-black text-white mb-1">₹2,999<span class="text-lg text-gray-400 font-normal">/mo</span></div>
+        <p class="text-sm text-gray-400 mb-6">Best for individual DevOps engineers</p>
+        <ul class="space-y-2 text-sm text-gray-300 mb-6">
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> 50 projects</li>
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Unlimited scans</li>
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> GitHub integration</li>
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Compliance reports</li>
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> JSON/PDF export</li>
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Priority support</li>
+        </ul>
+        <button class="pay-btn w-full py-3 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-gray-900 font-bold transition glow-cyan" data-plan="pro_monthly">
+          <i class="bi bi-credit-card mr-2"></i>Pay ₹2,999/mo
+        </button>
+      </div>
+
+      <!-- Pro Yearly -->
+      <div class="bg-gray-900 border border-gray-800 rounded-2xl p-7">
+        <div class="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2">Pro Yearly <span class="text-green-400 ml-1">Save 30%</span></div>
+        <div class="text-4xl font-black text-white mb-1">₹24,999<span class="text-lg text-gray-400 font-normal">/yr</span></div>
+        <p class="text-sm text-gray-400 mb-6">₹2,083/mo — best value</p>
+        <ul class="space-y-2 text-sm text-gray-300 mb-6">
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Everything in Pro Monthly</li>
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> 30% discount</li>
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Annual billing</li>
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Priority onboarding</li>
+        </ul>
+        <button class="pay-btn w-full py-3 rounded-lg border border-gray-700 hover:border-cyan-500 text-white font-semibold transition" data-plan="pro_yearly">
+          <i class="bi bi-credit-card mr-2"></i>Pay ₹24,999/yr
+        </button>
+      </div>
+
+      <!-- Team -->
+      <div class="bg-gray-900 border border-gray-800 rounded-2xl p-7">
+        <div class="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2">Team</div>
+        <div class="text-4xl font-black text-white mb-1">₹9,999<span class="text-lg text-gray-400 font-normal">/mo</span></div>
+        <p class="text-sm text-gray-400 mb-6">Up to 10 team members</p>
+        <ul class="space-y-2 text-sm text-gray-300 mb-6">
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> 200 projects</li>
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Team dashboard</li>
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Shared scan library</li>
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Slack integration</li>
+          <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Dedicated support</li>
+        </ul>
+        <button class="pay-btn w-full py-3 rounded-lg border border-gray-700 hover:border-cyan-500 text-white font-semibold transition" data-plan="team_monthly">
+          <i class="bi bi-credit-card mr-2"></i>Pay ₹9,999/mo
+        </button>
+      </div>
+    </div>
+
+    <!-- Payment methods info -->
+    <div class="text-center mt-8">
+      <p class="text-xs text-gray-500 mb-2">Secure payments powered by Razorpay</p>
+      <div class="flex items-center justify-center gap-4 text-gray-500 text-xs">
+        <span><i class="bi bi-credit-card mr-1"></i>Cards</span>
+        <span><i class="bi bi-phone mr-1"></i>UPI</span>
+        <span><i class="bi bi-bank mr-1"></i>Net Banking</span>
+        <span><i class="bi bi-wallet2 mr-1"></i>Wallets</span>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+document.querySelectorAll('.pay-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var planId = this.getAttribute('data-plan');
+        this.disabled = true;
+        this.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+        var self = this;
+
+        fetch('/create-order', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'plan_id=' + planId
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) {
+                alert('Error: ' + data.error);
+                self.disabled = false;
+                self.innerHTML = '<i class="bi bi-credit-card mr-2"></i>Retry';
+                return;
+            }
+
+            var options = {
+                key: data.key || '{{ razorpay_key }}',
+                amount: data.amount,
+                currency: data.currency,
+                name: data.name,
+                description: data.description,
+                order_id: data.order_id,
+                prefill: data.prefill || {},
+                theme: { color: '#06b6d4' },
+                handler: function(response) {
+                    // Payment successful — verify on server
+                    fetch('/payment-success', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature
+                        })
+                    })
+                    .then(function(r) { return r.json(); })
+                    .then(function(result) {
+                        if (result.status === 'success') {
+                            window.location.href = '/dashboard?upgraded=1';
+                        } else {
+                            alert('Payment verification failed. Contact support.');
+                        }
+                    });
+                },
+                modal: {
+                    ondismiss: function() {
+                        self.disabled = false;
+                        self.innerHTML = '<i class="bi bi-credit-card mr-2"></i>Pay';
+                    }
+                }
+            };
+
+            if (data.test_mode) {
+                // Test mode — simulate success without Razorpay popup
+                if (confirm('TEST MODE: Simulate successful payment for ' + data.description + '?')) {
+                    fetch('/payment-success', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            razorpay_order_id: data.order_id,
+                            razorpay_payment_id: 'pay_test_' + Date.now(),
+                            razorpay_signature: 'test_signature'
+                        })
+                    })
+                    .then(function(r) { return r.json(); })
+                    .then(function(result) {
+                        if (result.status === 'success') {
+                            window.location.href = '/dashboard?upgraded=1';
+                        }
+                    });
+                } else {
+                    self.disabled = false;
+                    self.innerHTML = '<i class="bi bi-credit-card mr-2"></i>Pay';
+                }
+            } else {
+                var rzp = new Razorpay(options);
+                rzp.open();
+            }
+        })
+        .catch(function(err) {
+            alert('Something went wrong. Please try again.');
+            self.disabled = false;
+            self.innerHTML = '<i class="bi bi-credit-card mr-2"></i>Retry';
+        });
+    });
+});
+</script>
+{% endblock %}

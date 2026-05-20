@@ -43,14 +43,45 @@ class User(UserMixin, db.Model):
     name = db.Column(db.String(255), nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     github_token = db.Column(db.String(500), nullable=True)
+    plan = db.Column(db.String(20), default='free')  # free, pro, team
+    plan_expires_at = db.Column(db.DateTime, nullable=True)
+    reset_token = db.Column(db.String(100), nullable=True)
+    reset_token_expires = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     projects = db.relationship('Project', backref='owner', lazy=True, cascade='all, delete-orphan')
+    payments = db.relationship('Payment', backref='user', lazy=True)
 
     def set_password(self, password):
         self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
     def check_password(self, password):
         return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
+
+    def get_plan_limit(self, key):
+        return PLAN_LIMITS.get(self.plan, PLAN_LIMITS['free']).get(key, 0)
+
+    def can_create_project(self):
+        current_count = Project.query.filter_by(user_id=self.id).count()
+        return current_count < self.get_plan_limit('projects')
+
+    def generate_reset_token(self):
+        from datetime import timedelta
+        self.reset_token = uuid.uuid4().hex
+        self.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+        return self.reset_token
+
+
+class Payment(db.Model):
+    __tablename__ = 'payments'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    razorpay_order_id = db.Column(db.String(100), nullable=True)
+    razorpay_payment_id = db.Column(db.String(100), nullable=True)
+    razorpay_signature = db.Column(db.String(255), nullable=True)
+    amount = db.Column(db.Integer, nullable=False)  # in paise
+    plan = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(20), default='pending')  # pending, completed, failed
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class Project(db.Model):
@@ -98,6 +129,23 @@ class Finding(db.Model):
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+
+# Plan limits
+PLAN_LIMITS = {
+    'free': {'projects': 2, 'scans_per_month': 5},
+    'pro': {'projects': 50, 'scans_per_month': 9999},
+    'team': {'projects': 200, 'scans_per_month': 9999},
+}
+
+PLAN_PRICES = {
+    'pro_monthly': {'amount': 299900, 'label': 'Pro Monthly', 'razorpay_amount': 299900},  # ₹2,999 in paise
+    'pro_yearly': {'amount': 2499900, 'label': 'Pro Yearly', 'razorpay_amount': 2499900},  # ₹24,999 in paise
+    'team_monthly': {'amount': 999900, 'label': 'Team Monthly', 'razorpay_amount': 999900},  # ₹9,999 in paise
+}
+
+RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID', 'rzp_test_XXXXXXXXXXXXXX')
+RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', '')
 
 
 # ============================================================
@@ -1101,6 +1149,11 @@ def projects():
 @app.route('/projects/new', methods=['GET', 'POST'])
 @login_required
 def project_new():
+    # Check plan limits
+    if not current_user.can_create_project():
+        flash(f'You\'ve reached the {current_user.plan} plan limit of {current_user.get_plan_limit("projects")} projects. Upgrade to Pro for unlimited projects.', 'error')
+        return redirect(url_for('upgrade'))
+
     if request.method == 'POST':
         try:
             name = request.form.get('name', '').strip()
@@ -1395,8 +1448,207 @@ def about():
 
 
 # ============================================================
-# APP INITIALIZATION
+# FORGOT PASSWORD
 # ============================================================
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        user = User.query.filter_by(email=email).first()
+        if user:
+            token = user.generate_reset_token()
+            db.session.commit()
+            reset_url = url_for('reset_password', token=token, _external=True)
+            # In production: send email via AWS SES
+            # For now: show the link (remove this in production)
+            flash(f'Password reset link has been sent to {email}. Check your inbox.', 'success')
+            # DEV ONLY: show link directly (remove in production)
+            flash(f'[DEV] Reset link: {reset_url}', 'info')
+        else:
+            # Don't reveal if email exists or not (security)
+            flash('If an account with that email exists, a reset link has been sent.', 'success')
+        return redirect(url_for('forgot_password'))
+    return render_template('forgot_password.html')
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    user = User.query.filter_by(reset_token=token).first()
+    if not user or not user.reset_token_expires or user.reset_token_expires.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        flash('Invalid or expired reset link. Please request a new one.', 'error')
+        return redirect(url_for('forgot_password'))
+
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        confirm = request.form.get('confirm_password', '')
+        if len(password) < 8:
+            flash('Password must be at least 8 characters.', 'error')
+            return render_template('reset_password.html', token=token)
+        if password != confirm:
+            flash('Passwords do not match.', 'error')
+            return render_template('reset_password.html', token=token)
+
+        user.set_password(password)
+        user.reset_token = None
+        user.reset_token_expires = None
+        db.session.commit()
+        flash('Password reset successfully! You can now login.', 'success')
+        return redirect(url_for('login'))
+
+    return render_template('reset_password.html', token=token)
+
+
+# ============================================================
+# PAYMENTS (Razorpay)
+# ============================================================
+
+@app.route('/upgrade', methods=['GET'])
+@login_required
+def upgrade():
+    return render_template('upgrade.html', razorpay_key=RAZORPAY_KEY_ID)
+
+
+@app.route('/create-order', methods=['POST'])
+@login_required
+def create_order():
+    """Create a Razorpay order for plan upgrade."""
+    plan_id = request.form.get('plan_id', 'pro_monthly')
+    plan_info = PLAN_PRICES.get(plan_id)
+    if not plan_info:
+        return jsonify({'error': 'Invalid plan'}), 400
+
+    try:
+        import hashlib
+        import hmac
+        import time
+
+        # If Razorpay keys are configured, create real order
+        if RAZORPAY_KEY_SECRET:
+            import urllib.request
+            import base64
+
+            order_data = json.dumps({
+                'amount': plan_info['razorpay_amount'],
+                'currency': 'INR',
+                'receipt': f'order_{current_user.id}_{int(time.time())}',
+                'notes': {'plan': plan_id, 'user_id': str(current_user.id)}
+            }).encode()
+
+            credentials = base64.b64encode(f'{RAZORPAY_KEY_ID}:{RAZORPAY_KEY_SECRET}'.encode()).decode()
+            req = urllib.request.Request(
+                'https://api.razorpay.com/v1/orders',
+                data=order_data,
+                headers={
+                    'Content-Type': 'application/json',
+                    'Authorization': f'Basic {credentials}'
+                }
+            )
+            with urllib.request.urlopen(req) as response:
+                order = json.loads(response.read().decode())
+
+            # Save payment record
+            payment = Payment(
+                user_id=current_user.id,
+                razorpay_order_id=order['id'],
+                amount=plan_info['razorpay_amount'],
+                plan=plan_id,
+                status='pending'
+            )
+            db.session.add(payment)
+            db.session.commit()
+
+            return jsonify({
+                'order_id': order['id'],
+                'amount': plan_info['razorpay_amount'],
+                'currency': 'INR',
+                'key': RAZORPAY_KEY_ID,
+                'name': 'DeployPilot AI',
+                'description': plan_info['label'],
+                'prefill': {
+                    'name': current_user.name,
+                    'email': current_user.email
+                }
+            })
+        else:
+            # Test mode — simulate order creation
+            fake_order_id = f'order_test_{uuid.uuid4().hex[:12]}'
+            payment = Payment(
+                user_id=current_user.id,
+                razorpay_order_id=fake_order_id,
+                amount=plan_info['razorpay_amount'],
+                plan=plan_id,
+                status='pending'
+            )
+            db.session.add(payment)
+            db.session.commit()
+
+            return jsonify({
+                'order_id': fake_order_id,
+                'amount': plan_info['razorpay_amount'],
+                'currency': 'INR',
+                'key': RAZORPAY_KEY_ID,
+                'name': 'DeployPilot AI',
+                'description': plan_info['label'],
+                'test_mode': True,
+                'prefill': {
+                    'name': current_user.name,
+                    'email': current_user.email
+                }
+            })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/payment-success', methods=['POST'])
+@login_required
+def payment_success():
+    """Verify Razorpay payment and activate plan."""
+    data = request.get_json() or request.form
+    order_id = data.get('razorpay_order_id', '')
+    payment_id = data.get('razorpay_payment_id', '')
+    signature = data.get('razorpay_signature', '')
+
+    payment = Payment.query.filter_by(
+        razorpay_order_id=order_id, user_id=current_user.id
+    ).first()
+
+    if not payment:
+        return jsonify({'error': 'Payment not found'}), 404
+
+    # Verify signature (if secret is configured)
+    if RAZORPAY_KEY_SECRET and signature:
+        import hmac
+        import hashlib
+        expected = hmac.new(
+            RAZORPAY_KEY_SECRET.encode(),
+            f'{order_id}|{payment_id}'.encode(),
+            hashlib.sha256
+        ).hexdigest()
+        if expected != signature:
+            payment.status = 'failed'
+            db.session.commit()
+            return jsonify({'error': 'Payment verification failed'}), 400
+
+    # Activate plan
+    payment.razorpay_payment_id = payment_id
+    payment.razorpay_signature = signature
+    payment.status = 'completed'
+
+    # Determine plan from payment record
+    from datetime import timedelta
+    if 'yearly' in payment.plan:
+        current_user.plan_expires_at = datetime.now(timezone.utc) + timedelta(days=365)
+    else:
+        current_user.plan_expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+
+    if 'team' in payment.plan:
+        current_user.plan = 'team'
+    else:
+        current_user.plan = 'pro'
+
+    db.session.commit()
+    return jsonify({'status': 'success', 'plan': current_user.plan})
 
 with app.app_context():
     db.create_all()
