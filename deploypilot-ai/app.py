@@ -4,7 +4,10 @@ import uuid
 import json
 import shutil
 import subprocess
-from datetime import datetime, timezone
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 
 from flask import (
@@ -146,6 +149,38 @@ PLAN_PRICES = {
 
 RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID', 'rzp_test_XXXXXXXXXXXXXX')
 RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', '')
+
+# Email config (Gmail SMTP or AWS SES)
+SMTP_HOST = os.getenv('SMTP_HOST', 'smtp.gmail.com')
+SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+SMTP_USER = os.getenv('SMTP_USER', '')  # your email
+SMTP_PASS = os.getenv('SMTP_PASS', '')  # app password (not regular password)
+SMTP_FROM = os.getenv('SMTP_FROM', 'DeployPilot AI <deploypilotai@gmail.com>')
+
+# Admin config
+ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'deploypilotai@gmail.com')
+
+
+def send_email(to_email, subject, html_body):
+    """Send email via SMTP. Returns True on success, False on failure."""
+    if not SMTP_USER or not SMTP_PASS:
+        app.logger.warning(f'Email not configured. Would send to {to_email}: {subject}')
+        return False
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = SMTP_FROM
+        msg['To'] = to_email
+        msg.attach(MIMEText(html_body, 'html'))
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASS)
+            server.sendmail(SMTP_USER, to_email, msg.as_string())
+        return True
+    except Exception as e:
+        app.logger.error(f'Failed to send email to {to_email}: {e}')
+        return False
 
 
 # ============================================================
@@ -1460,13 +1495,27 @@ def forgot_password():
             token = user.generate_reset_token()
             db.session.commit()
             reset_url = url_for('reset_password', token=token, _external=True)
-            # In production: send email via AWS SES
-            # For now: show the link (remove this in production)
-            flash(f'Password reset link has been sent to {email}. Check your inbox.', 'success')
-            # DEV ONLY: show link directly (remove in production)
-            flash(f'[DEV] Reset link: {reset_url}', 'info')
+
+            # Send reset email
+            email_html = f'''
+            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:40px 20px;">
+                <h2 style="color:#06b6d4;margin-bottom:20px;">Reset Your Password</h2>
+                <p style="color:#333;line-height:1.6;">Hi {user.name},</p>
+                <p style="color:#333;line-height:1.6;">Click the button below to reset your password. This link expires in 1 hour.</p>
+                <a href="{reset_url}" style="display:inline-block;background:#06b6d4;color:#fff;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:bold;margin:20px 0;">Reset Password</a>
+                <p style="color:#666;font-size:0.85rem;margin-top:20px;">If you didn't request this, ignore this email.</p>
+                <hr style="border:none;border-top:1px solid #eee;margin:30px 0;">
+                <p style="color:#999;font-size:0.8rem;">DeployPilot AI · InfraAudit</p>
+            </div>
+            '''
+            sent = send_email(user.email, 'Reset your DeployPilot AI password', email_html)
+            if sent:
+                flash(f'Password reset link sent to {email}. Check your inbox.', 'success')
+            else:
+                # Fallback: show link directly if email not configured
+                flash(f'Email service not configured. Use this link to reset:', 'info')
+                flash(f'{reset_url}', 'info')
         else:
-            # Don't reveal if email exists or not (security)
             flash('If an account with that email exists, a reset link has been sent.', 'success')
         return redirect(url_for('forgot_password'))
     return render_template('forgot_password.html')
@@ -1649,6 +1698,56 @@ def payment_success():
 
     db.session.commit()
     return jsonify({'status': 'success', 'plan': current_user.plan})
+
+
+# ============================================================
+# ADMIN DASHBOARD
+# ============================================================
+
+def admin_required(f):
+    @wraps(f)
+    @login_required
+    def decorated(*args, **kwargs):
+        if current_user.email != ADMIN_EMAIL:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    users = User.query.order_by(User.created_at.desc()).all()
+    total_users = len(users)
+    pro_users = sum(1 for u in users if u.plan == 'pro')
+    team_users = sum(1 for u in users if u.plan == 'team')
+    free_users = sum(1 for u in users if u.plan == 'free')
+    total_scans = Scan.query.count()
+    total_projects = Project.query.count()
+    total_payments = Payment.query.filter_by(status='completed').count()
+    total_revenue = db.session.query(db.func.sum(Payment.amount)).filter_by(status='completed').scalar() or 0
+
+    return render_template('admin.html',
+                           users=users,
+                           total_users=total_users,
+                           pro_users=pro_users,
+                           team_users=team_users,
+                           free_users=free_users,
+                           total_scans=total_scans,
+                           total_projects=total_projects,
+                           total_payments=total_payments,
+                           total_revenue=total_revenue)
+
+
+@app.route('/admin/user/<int:user_id>')
+@admin_required
+def admin_user_detail(user_id):
+    user = User.query.get_or_404(user_id)
+    projects = Project.query.filter_by(user_id=user.id).all()
+    payments = Payment.query.filter_by(user_id=user.id).order_by(Payment.created_at.desc()).all()
+    scans = Scan.query.join(Project).filter(Project.user_id == user.id).order_by(Scan.created_at.desc()).limit(10).all()
+    return render_template('admin_user.html', user=user, projects=projects, payments=payments, scans=scans)
+
 
 with app.app_context():
     db.create_all()
