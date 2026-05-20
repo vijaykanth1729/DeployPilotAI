@@ -54,6 +54,11 @@
                     <a href="{{ url_for('pricing') }}" class="text-gray-300 hover:text-white transition">Pricing</a>
                     <div class="flex items-center space-x-3 ml-4 pl-4 border-l border-gray-700">
                         <span class="text-sm text-gray-400">{{ current_user.name }}</span>
+                        {% if current_user.email == config.get('ADMIN_EMAIL', 'deploypilotai@gmail.com') %}
+                        <a href="{{ url_for('admin_dashboard') }}" class="text-sm text-orange-400 hover:text-orange-300 transition" title="Admin">
+                            <i class="bi bi-gear-fill"></i>
+                        </a>
+                        {% endif %}
                         <a href="{{ url_for('logout') }}" class="text-sm text-red-400 hover:text-red-300 transition">
                             <i class="bi bi-box-arrow-right"></i> Logout
                         </a>

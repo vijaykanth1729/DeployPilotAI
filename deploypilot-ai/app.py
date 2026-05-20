@@ -183,6 +183,12 @@ def send_email(to_email, subject, html_body):
         return False
 
 
+@app.context_processor
+def inject_config():
+    """Make config available in all templates."""
+    return {'config': {'ADMIN_EMAIL': ADMIN_EMAIL}}
+
+
 # ============================================================
 # ANALYSIS ENGINE
 # ============================================================

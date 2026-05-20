@@ -1,6 +1,23 @@
 {% extends "base.html" %}
 {% block title %}User: {{ user.name }}{% endblock %}
 {% block content %}
+<!-- Admin Header Bar -->
+<div class="bg-gradient-to-r from-red-900/80 to-orange-900/60 border-b border-red-500/30 px-4 py-3">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-red-500/20 border border-red-500/40 rounded-lg flex items-center justify-center">
+                <i class="bi bi-gear-fill text-red-400"></i>
+            </div>
+            <span class="text-red-300 font-bold text-sm tracking-wide uppercase">Admin Console</span>
+            <span class="text-gray-500">›</span>
+            <span class="text-orange-300 text-sm">User Detail</span>
+        </div>
+        <a href="{{ url_for('admin_dashboard') }}" class="text-xs text-orange-300 hover:text-white border border-orange-500/30 px-3 py-1 rounded-lg transition">
+            <i class="bi bi-arrow-left mr-1"></i>All Users
+        </a>
+    </div>
+</div>
+
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="mb-6">
         <a href="{{ url_for('admin_dashboard') }}" class="text-gray-400 hover:text-white text-sm">
