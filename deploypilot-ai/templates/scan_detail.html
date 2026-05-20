@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Scan Results{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Breadcrumb -->
+    <div class="mb-6">
+        <a href="{{ url_for('project_detail', project_id=scan.project.id) }}" class="text-gray-400 hover:text-white text-sm transition">
+            <i class="bi bi-arrow-left mr-1"></i> Back to {{ scan.project.name }}
+        </a>
+    </div>
+
+    <!-- Scan Header -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-white">Scan Results</h1>
+                <p class="text-sm text-gray-400 mt-1">{{ scan.project.name }} &middot; {{ scan.created_at.strftime('%B %d, %Y at %H:%M') }}</p>
+            </div>
+            <div class="flex items-center space-x-4 mt-4 md:mt-0">
+                <div class="text-center">
+                    <div class="text-5xl font-bold
+                        {% if scan.risk_score >= 80 %}text-green-400
+                        {% elif scan.risk_score >= 60 %}text-yellow-400
+                        {% elif scan.risk_score >= 40 %}text-orange-400
+                        {% else %}text-red-400{% endif %}">{{ scan.risk_score }}</div>
+                    <div class="text-xs text-gray-400 mt-1">Risk Score</div>
+                </div>
+                <a href="{{ url_for('scan_export', scan_id=scan.id) }}" class="border border-gray-700 hover:border-gray-500 text-gray-300 px-4 py-2 rounded-lg font-medium transition text-sm" target="_blank">
+                    <i class="bi bi-download mr-1"></i> Export JSON
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 text-center">
+            <div class="text-2xl font-bold text-red-400">{{ scan.critical_count }}</div>
+            <div class="text-xs text-gray-400 mt-1">Critical</div>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 text-center">
+            <div class="text-2xl font-bold text-orange-400">{{ scan.high_count }}</div>
+            <div class="text-xs text-gray-400 mt-1">High</div>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 text-center">
+            <div class="text-2xl font-bold text-yellow-400">{{ scan.medium_count }}</div>
+            <div class="text-xs text-gray-400 mt-1">Medium</div>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 text-center">
+            <div class="text-2xl font-bold text-blue-400">{{ scan.low_count }}</div>
+            <div class="text-xs text-gray-400 mt-1">Low</div>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4 text-center">
+            <div class="text-2xl font-bold text-gray-400">{{ scan.info_count }}</div>
+            <div class="text-xs text-gray-400 mt-1">Info</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <!-- Severity Donut Chart -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <h3 class="text-sm font-semibold text-white mb-4">Severity Breakdown</h3>
+            <canvas id="severityChart" height="200"></canvas>
+        </div>
+
+        <!-- Compliance Coverage -->
+        <div class="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <h3 class="text-sm font-semibold text-white mb-4">Compliance Framework Coverage</h3>
+            {% if frameworks %}
+            <div class="space-y-4">
+                {% for framework, count in frameworks.items() %}
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm text-gray-300">{{ framework }}</span>
+                        <span class="text-sm text-gray-400">{{ count }} finding{{ 's' if count != 1 }}</span>
+                    </div>
+                    <div class="w-full bg-gray-800 rounded-full h-2">
+                        <div class="h-2 rounded-full
+                            {% if 'CIS-K8S' in framework %}bg-cyan-500
+                            {% elif 'AWS-WA' in framework %}bg-orange-500
+                            {% elif 'DOCKER' in framework %}bg-blue-500
+                            {% else %}bg-purple-500{% endif %}"
+                            style="width: {{ [count * 10, 100]|min }}%"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8 text-gray-500">
+                <p>No compliance findings</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Findings List -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h3 class="text-lg font-semibold text-white mb-4">Findings ({{ findings|length }})</h3>
+        {% if findings %}
+        {% set ns = namespace(current_file='') %}
+        <div class="space-y-2">
+            {% for finding in findings %}
+            {% if finding.file_path and finding.file_path != ns.current_file %}
+            {% set ns.current_file = finding.file_path %}
+            <div class="flex items-center gap-2 pt-4 pb-2 {% if not loop.first %}border-t border-gray-800 mt-4{% endif %}">
+                <i class="bi bi-file-code text-cyan-400"></i>
+                <span class="text-sm font-mono text-cyan-300">{{ finding.file_path }}</span>
+            </div>
+            {% endif %}
+            <details class="group bg-gray-800/30 border border-gray-800 rounded-lg ml-4">
+                <summary class="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-800/50 rounded-lg transition">
+                    <div class="flex items-center space-x-3 min-w-0">
+                        <span class="px-2 py-0.5 rounded text-xs font-bold flex-shrink-0
+                            {% if finding.severity == 'critical' %}bg-red-500/20 text-red-400
+                            {% elif finding.severity == 'high' %}bg-orange-500/20 text-orange-400
+                            {% elif finding.severity == 'medium' %}bg-yellow-500/20 text-yellow-400
+                            {% elif finding.severity == 'low' %}bg-blue-500/20 text-blue-400
+                            {% else %}bg-gray-500/20 text-gray-400{% endif %}">{{ finding.severity|upper }}</span>
+                        <span class="text-sm text-white truncate">{{ finding.title }}</span>
+                        {% if finding.line_number %}
+                        <span class="text-xs text-gray-500">L{{ finding.line_number }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center space-x-2 flex-shrink-0 ml-4">
+                        {% if finding.framework %}
+                        <span class="text-xs text-gray-500 hidden sm:inline bg-gray-800 px-2 py-0.5 rounded">{{ finding.framework }}</span>
+                        {% endif %}
+                        <i class="bi bi-chevron-down text-gray-500 group-open:rotate-180 transition-transform text-xs"></i>
+                    </div>
+                </summary>
+                <div class="px-4 pb-3 pt-2 text-sm">
+                    <p class="text-gray-400 mb-2">{{ finding.description }}</p>
+                    <p class="text-green-400/80"><i class="bi bi-lightbulb mr-1"></i> {{ finding.recommendation }}</p>
+                </div>
+            </details>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-8 text-gray-500">
+            <i class="bi bi-check-circle text-3xl text-green-400 mb-2 block"></i>
+            <p>No findings — your infrastructure looks clean!</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const severityCtx = document.getElementById('severityChart');
+    if (severityCtx) {
+        new Chart(severityCtx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Critical', 'High', 'Medium', 'Low', 'Info'],
+                datasets: [{
+                    data: [{{ scan.critical_count }}, {{ scan.high_count }}, {{ scan.medium_count }}, {{ scan.low_count }}, {{ scan.info_count }}],
+                    backgroundColor: ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#6b7280'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                cutout: '65%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#9ca3af', padding: 12, font: { size: 11 } }
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

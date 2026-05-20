@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Environment
+.env
+
+# VS Code
+.vscode/
+
+# Database
+*.db
+
+# Docker
+*.log

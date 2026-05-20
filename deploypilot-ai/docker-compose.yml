@@ -1,14 +1,20 @@
-version: '3.8'
-
 services:
   web:
     build: .
     ports:
       - "5000:5000"
     environment:
-      - SECRET_KEY=dev-secret-key-change-in-production
-      - DATABASE_URL=sqlite:///deploypilot.db
-      - FLASK_ENV=development
+      - SECRET_KEY=${SECRET_KEY:-infraaudit-prod-secret-change-me}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///infraaudit.db}
+      - FLASK_ENV=production
     volumes:
-      - ./instance:/app/instance
+      - app_data:/app/instance
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  app_data:

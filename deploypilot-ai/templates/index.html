@@ -1,123 +1,159 @@
 {% extends "base.html" %}
-{% block title %}DeployPilot AI — AI-Powered DevOps Assistant{% endblock %}
+{% block title %}AI-Powered Infrastructure Security Scanner{% endblock %}
 {% block content %}
-<!-- HERO -->
-<section class="py-20 px-4 text-center relative overflow-hidden">
-  <div class="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent"></div>
-  <div class="relative max-w-4xl mx-auto">
-    <div class="inline-flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/30 rounded-full px-4 py-1.5 text-xs font-semibold text-cyan-400 mb-6">
-      <i class="bi bi-lightning-charge-fill"></i> AI-Powered DevOps Analysis
-    </div>
-    <h1 class="text-4xl md:text-6xl font-black mb-6 leading-tight">
-      Ship Faster.<br>
-      <span class="bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">Deploy Safer.</span>
-    </h1>
-    <p class="text-lg text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-      DeployPilot AI analyzes your Kubernetes YAML, Terraform, Dockerfiles, and CI/CD pipelines — detecting issues, security risks, and optimization opportunities in seconds.
-    </p>
-    <div class="flex flex-wrap justify-center gap-4 mb-12">
-      <a href="/register" class="px-8 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold text-base glow-cyan hover:-translate-y-0.5 transition">
-        <i class="bi bi-rocket-takeoff-fill mr-2"></i>Start Free — No Card Required
-      </a>
-      <a href="#demo" class="px-8 py-3.5 rounded-xl border border-gray-700 text-gray-300 font-semibold hover:border-cyan-500 hover:text-cyan-400 transition">
-        <i class="bi bi-play-circle mr-2"></i>See Demo
-      </a>
-    </div>
-    <!-- Stats -->
-    <div class="flex flex-wrap justify-center gap-8 text-center">
-      <div><div class="text-2xl font-black text-white">500+</div><div class="text-xs text-gray-500">Analyses Run</div></div>
-      <div class="w-px bg-gray-800"></div>
-      <div><div class="text-2xl font-black text-white">5</div><div class="text-xs text-gray-500">File Types</div></div>
-      <div class="w-px bg-gray-800"></div>
-      <div><div class="text-2xl font-black text-white">&lt;3s</div><div class="text-xs text-gray-500">Analysis Time</div></div>
-      <div class="w-px bg-gray-800"></div>
-      <div><div class="text-2xl font-black text-white">AWS</div><div class="text-xs text-gray-500">Cloud Native</div></div>
-    </div>
-  </div>
-</section>
-
-<!-- DEMO PREVIEW -->
-<section id="demo" class="py-16 px-4">
-  <div class="max-w-5xl mx-auto">
-    <div class="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl">
-      <div class="flex items-center gap-2 px-4 py-3 bg-gray-900 border-b border-gray-800">
-        <div class="w-3 h-3 rounded-full bg-red-500"></div>
-        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-        <div class="w-3 h-3 rounded-full bg-green-500"></div>
-        <span class="ml-3 text-xs text-gray-500">deploypilot-ai — analysis results</span>
-      </div>
-      <div class="p-6 font-mono text-sm">
-        <div class="text-gray-500 mb-2">$ deploypilot analyze deployment.yaml --type kubernetes</div>
-        <div class="mt-3 space-y-3">
-          <div class="flex items-start gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-            <span class="text-red-400 font-bold text-xs px-2 py-0.5 bg-red-500/20 rounded">HIGH</span>
-            <div><span class="text-red-300 font-semibold">Missing Resource Limits</span><br><span class="text-gray-400 text-xs">No CPU/memory limits. Risk of OOM kills and resource contention.</span></div>
-          </div>
-          <div class="flex items-start gap-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-            <span class="text-yellow-400 font-bold text-xs px-2 py-0.5 bg-yellow-500/20 rounded">MED</span>
-            <div><span class="text-yellow-300 font-semibold">Using :latest Tag</span><br><span class="text-gray-400 text-xs">Non-deterministic builds. Pin to semantic version or SHA digest.</span></div>
-          </div>
-          <div class="flex items-start gap-3 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
-            <span class="text-cyan-400 font-bold text-xs px-2 py-0.5 bg-cyan-500/20 rounded">INFO</span>
-            <div><span class="text-cyan-300 font-semibold">Consider PodDisruptionBudget</span><br><span class="text-gray-400 text-xs">Add PDB to prevent all replicas being evicted during node drain.</span></div>
-          </div>
+<!-- Hero Section -->
+<section class="relative overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent"></div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 relative">
+        <div class="text-center max-w-4xl mx-auto">
+            <div class="inline-flex items-center space-x-2 bg-cyan-500/10 border border-cyan-500/30 rounded-full px-4 py-1.5 mb-8">
+                <i class="bi bi-lightning-charge-fill text-cyan-400"></i>
+                <span class="text-sm text-cyan-300">AI-Powered Infrastructure Security</span>
+            </div>
+            <h1 class="text-5xl md:text-6xl font-bold text-white mb-6 leading-tight">
+                Scan Your Infrastructure for<br>
+                <span class="gradient-text">Security Issues in Seconds</span>
+            </h1>
+            <p class="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
+                Automatically detect misconfigurations, vulnerabilities, and compliance violations
+                in your Kubernetes, Terraform, Docker, and CI/CD pipelines.
+            </p>
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <a href="{{ url_for('register') }}" class="bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-8 py-3.5 rounded-lg font-semibold transition glow-cyan text-lg">
+                    Start Free <i class="bi bi-arrow-right ml-2"></i>
+                </a>
+                <a href="#how-it-works" class="border border-gray-700 hover:border-gray-500 text-gray-300 px-8 py-3.5 rounded-lg font-medium transition">
+                    See How It Works
+                </a>
+            </div>
+            <p class="text-sm text-gray-500 mt-4">No credit card required &middot; 2 free projects</p>
         </div>
-        <div class="mt-4 text-green-400 text-xs">✓ 3 findings · 1 high · 1 medium · 1 info · analyzed in 1.2s</div>
-      </div>
     </div>
-  </div>
 </section>
 
-<!-- FEATURES -->
-<section id="features" class="py-20 px-4 bg-gray-900/50">
-  <div class="max-w-6xl mx-auto">
-    <div class="text-center mb-14">
-      <div class="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-3">Platform Features</div>
-      <h2 class="text-3xl md:text-4xl font-black">Analyze. Fix. Deploy.</h2>
+<!-- How It Works -->
+<section id="how-it-works" class="py-20 border-t border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <h2 class="text-3xl font-bold text-center text-white mb-4">How It Works</h2>
+        <p class="text-gray-400 text-center mb-16 max-w-2xl mx-auto">Four simple steps to secure your infrastructure</p>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-cyan-500/10 border border-cyan-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i class="bi bi-github text-cyan-400 text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">1. Connect</h3>
+                <p class="text-gray-400 text-sm">Link your GitHub repo or paste code directly</p>
+            </div>
+            <div class="text-center">
+                <div class="w-16 h-16 bg-purple-500/10 border border-purple-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i class="bi bi-search text-purple-400 text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">2. Scan</h3>
+                <p class="text-gray-400 text-sm">AI analyzes all infrastructure files automatically</p>
+            </div>
+            <div class="text-center">
+                <div class="w-16 h-16 bg-orange-500/10 border border-orange-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i class="bi bi-wrench text-orange-400 text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">3. Fix</h3>
+                <p class="text-gray-400 text-sm">Get specific recommendations with code fixes</p>
+            </div>
+            <div class="text-center">
+                <div class="w-16 h-16 bg-green-500/10 border border-green-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i class="bi bi-rocket-takeoff text-green-400 text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">4. Ship</h3>
+                <p class="text-gray-400 text-sm">Deploy with confidence knowing your infra is secure</p>
+            </div>
+        </div>
     </div>
-    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-cyan-500/50 hover:-translate-y-1 transition">
-        <div class="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 text-lg mb-4"><i class="bi bi-filetype-yml"></i></div>
-        <h3 class="font-bold mb-2">Kubernetes YAML</h3>
-        <p class="text-sm text-gray-400">Detect missing probes, resource limits, security contexts, and anti-patterns in your K8s manifests.</p>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-blue-500/50 hover:-translate-y-1 transition">
-        <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 text-lg mb-4"><i class="bi bi-building"></i></div>
-        <h3 class="font-bold mb-2">Terraform Code</h3>
-        <p class="text-sm text-gray-400">Find missing backends, unencrypted resources, unpinned providers, and IaC best practice violations.</p>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-purple-500/50 hover:-translate-y-1 transition">
-        <div class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-400 text-lg mb-4"><i class="bi bi-box-seam"></i></div>
-        <h3 class="font-bold mb-2">Dockerfiles</h3>
-        <p class="text-sm text-gray-400">Catch root user issues, bloated images, missing health checks, and layer optimization opportunities.</p>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-green-500/50 hover:-translate-y-1 transition">
-        <div class="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center text-green-400 text-lg mb-4"><i class="bi bi-arrow-repeat"></i></div>
-        <h3 class="font-bold mb-2">CI/CD Pipelines</h3>
-        <p class="text-sm text-gray-400">Detect hardcoded secrets, missing caches, no test steps, and pipeline security issues.</p>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-orange-500/50 hover:-translate-y-1 transition">
-        <div class="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-400 text-lg mb-4"><i class="bi bi-terminal"></i></div>
-        <h3 class="font-bold mb-2">Kubernetes Logs</h3>
-        <p class="text-sm text-gray-400">Identify OOMKilled, CrashLoopBackOff, connection failures, and error patterns in pod logs.</p>
-      </div>
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-pink-500/50 hover:-translate-y-1 transition">
-        <div class="w-10 h-10 rounded-lg bg-pink-500/10 flex items-center justify-center text-pink-400 text-lg mb-4"><i class="bi bi-shield-check"></i></div>
-        <h3 class="font-bold mb-2">Security Scanning</h3>
-        <p class="text-sm text-gray-400">CIS benchmarks, RBAC issues, secret exposure, and container vulnerability detection.</p>
-      </div>
+</section>
+
+<!-- Features Grid -->
+<section class="py-20 border-t border-gray-800 bg-gray-900/30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <h2 class="text-3xl font-bold text-center text-white mb-4">Comprehensive Security Coverage</h2>
+        <p class="text-gray-400 text-center mb-16 max-w-2xl mx-auto">40+ real checks across your entire infrastructure stack</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
+                <div class="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <i class="bi bi-kubernetes text-blue-400 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">Kubernetes Security</h3>
+                <p class="text-gray-400 text-sm">15 checks for resource limits, security contexts, RBAC, network policies, and pod security standards.</p>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
+                <div class="w-12 h-12 bg-purple-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <i class="bi bi-cloud text-purple-400 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">Terraform Analysis</h3>
+                <p class="text-gray-400 text-sm">12 checks for encryption, state management, provider pinning, and cloud resource hardening.</p>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
+                <div class="w-12 h-12 bg-cyan-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <i class="bi bi-box text-cyan-400 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">Docker Best Practices</h3>
+                <p class="text-gray-400 text-sm">8 checks for image pinning, non-root users, multi-stage builds, and secret management.</p>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
+                <div class="w-12 h-12 bg-orange-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <i class="bi bi-gear text-orange-400 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">CI/CD Pipeline Security</h3>
+                <p class="text-gray-400 text-sm">8 checks for secret management, action pinning, environment protection, and image scanning.</p>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
+                <div class="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <i class="bi bi-clipboard-check text-green-400 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">Compliance Mapping</h3>
+                <p class="text-gray-400 text-sm">Findings mapped to CIS Kubernetes Benchmark, AWS Well-Architected, and Docker CIS standards.</p>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
+                <div class="w-12 h-12 bg-red-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <i class="bi bi-graph-up text-red-400 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">Risk Scoring & Trends</h3>
+                <p class="text-gray-400 text-sm">Track your security posture over time with risk scores, trend charts, and severity breakdowns.</p>
+            </div>
+        </div>
     </div>
-  </div>
+</section>
+
+<!-- Compliance Frameworks -->
+<section class="py-20 border-t border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <h2 class="text-3xl font-bold text-center text-white mb-4">Compliance Frameworks Supported</h2>
+        <p class="text-gray-400 text-center mb-12">Map findings to industry-standard security benchmarks</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            <div class="text-center p-6 bg-gray-900 border border-gray-800 rounded-xl">
+                <div class="text-3xl font-bold text-cyan-400 mb-2">CIS</div>
+                <div class="text-white font-medium">Kubernetes Benchmark 1.8</div>
+                <p class="text-gray-400 text-sm mt-2">Pod security, RBAC, network policies</p>
+            </div>
+            <div class="text-center p-6 bg-gray-900 border border-gray-800 rounded-xl">
+                <div class="text-3xl font-bold text-orange-400 mb-2">AWS</div>
+                <div class="text-white font-medium">Well-Architected Framework</div>
+                <p class="text-gray-400 text-sm mt-2">Security, reliability, cost optimization</p>
+            </div>
+            <div class="text-center p-6 bg-gray-900 border border-gray-800 rounded-xl">
+                <div class="text-3xl font-bold text-blue-400 mb-2">Docker</div>
+                <div class="text-white font-medium">CIS Benchmark</div>
+                <p class="text-gray-400 text-sm mt-2">Image security, runtime configuration</p>
+            </div>
+        </div>
+    </div>
 </section>
 
 <!-- CTA -->
-<section class="py-20 px-4 text-center">
-  <div class="max-w-2xl mx-auto">
-    <h2 class="text-3xl font-black mb-4">Ready to ship safer?</h2>
-    <p class="text-gray-400 mb-8">Start analyzing your DevOps configs in seconds. Free tier available — no credit card required.</p>
-    <a href="/register" class="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold glow-cyan hover:-translate-y-0.5 transition">
-      <i class="bi bi-rocket-takeoff-fill"></i> Get Started Free
-    </a>
-  </div>
+<section class="py-20 border-t border-gray-800 bg-gradient-to-b from-gray-900/50 to-gray-950">
+    <div class="max-w-3xl mx-auto px-4 text-center">
+        <h2 class="text-3xl font-bold text-white mb-4">Ready to Secure Your Infrastructure?</h2>
+        <p class="text-gray-400 mb-8">Start scanning in under 60 seconds. No credit card required.</p>
+        <a href="{{ url_for('register') }}" class="inline-block bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-8 py-3.5 rounded-lg font-semibold transition glow-cyan text-lg">
+            Start Free <i class="bi bi-arrow-right ml-2"></i>
+        </a>
+    </div>
 </section>
 {% endblock %}

@@ -1,40 +1,78 @@
 {% extends "base.html" %}
 {% block title %}{% if mode == 'register' %}Sign Up{% else %}Login{% endif %}{% endblock %}
 {% block content %}
-<section class="py-20 px-4 flex items-center justify-center min-h-[70vh]">
-  <div class="w-full max-w-md">
-    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-8">
-      <div class="text-center mb-8">
-        <h1 class="text-2xl font-black mb-2">{% if mode == 'register' %}Create your account{% else %}Welcome back{% endif %}</h1>
-        <p class="text-sm text-gray-400">{% if mode == 'register' %}Start analyzing DevOps configs for free{% else %}Sign in to your DeployPilot account{% endif %}</p>
-      </div>
-      <form method="POST" class="space-y-4">
-        {% if mode == 'register' %}
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Full Name</label>
-          <input type="text" name="name" required placeholder="Vijay Kumar" class="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition" />
+<div class="min-h-[80vh] flex items-center justify-center px-4 py-12">
+    <div class="w-full max-w-md">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-8">
+            <div class="text-center mb-8">
+                <div class="w-14 h-14 bg-cyan-500/10 border border-cyan-500/30 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <i class="bi bi-shield-check text-cyan-400 text-2xl"></i>
+                </div>
+                {% if mode == 'register' %}
+                <h1 class="text-2xl font-bold text-white">Create Your Account</h1>
+                <p class="text-gray-400 mt-2">Start scanning infrastructure for free</p>
+                {% else %}
+                <h1 class="text-2xl font-bold text-white">Welcome Back</h1>
+                <p class="text-gray-400 mt-2">Sign in to your InfraAudit account</p>
+                {% endif %}
+            </div>
+
+            {% if mode == 'register' %}
+            <form method="POST" action="{{ url_for('register') }}" class="space-y-5">
+                <div>
+                    <label for="name" class="block text-sm font-medium text-gray-300 mb-1.5">Full Name</label>
+                    <input type="text" id="name" name="name" required
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
+                        placeholder="Vijaykanth Anugu">
+                </div>
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-300 mb-1.5">Email</label>
+                    <input type="email" id="email" name="email" required
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
+                        placeholder="you@company.com">
+                </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-300 mb-1.5">Password</label>
+                    <input type="password" id="password" name="password" required minlength="8"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
+                        placeholder="Min 8 characters">
+                </div>
+                <div>
+                    <label for="confirm_password" class="block text-sm font-medium text-gray-300 mb-1.5">Confirm Password</label>
+                    <input type="password" id="confirm_password" name="confirm_password" required
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
+                        placeholder="Repeat password">
+                </div>
+                <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-gray-900 py-3 rounded-lg font-semibold transition glow-cyan">
+                    Create Account
+                </button>
+            </form>
+            <p class="text-center text-gray-400 text-sm mt-6">
+                Already have an account? <a href="{{ url_for('login') }}" class="text-cyan-400 hover:text-cyan-300">Sign in</a>
+            </p>
+            {% else %}
+            <form method="POST" action="{{ url_for('login') }}" class="space-y-5">
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-300 mb-1.5">Email</label>
+                    <input type="email" id="email" name="email" required
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
+                        placeholder="you@company.com">
+                </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-300 mb-1.5">Password</label>
+                    <input type="password" id="password" name="password" required
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
+                        placeholder="Your password">
+                </div>
+                <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-gray-900 py-3 rounded-lg font-semibold transition glow-cyan">
+                    Sign In
+                </button>
+            </form>
+            <p class="text-center text-gray-400 text-sm mt-6">
+                Don't have an account? <a href="{{ url_for('register') }}" class="text-cyan-400 hover:text-cyan-300">Sign up free</a>
+            </p>
+            {% endif %}
         </div>
-        {% endif %}
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Email</label>
-          <input type="email" name="email" required placeholder="you@company.com" class="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Password</label>
-          <input type="password" name="password" required minlength="6" placeholder="••••••••" class="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition" />
-        </div>
-        <button type="submit" class="w-full py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold glow-cyan hover:-translate-y-0.5 transition mt-2">
-          {% if mode == 'register' %}Create Account{% else %}Sign In{% endif %}
-        </button>
-      </form>
-      <div class="text-center mt-6 text-sm text-gray-400">
-        {% if mode == 'register' %}
-          Already have an account? <a href="/login" class="text-cyan-400 hover:underline">Sign in</a>
-        {% else %}
-          Don't have an account? <a href="/register" class="text-cyan-400 hover:underline">Sign up free</a>
-        {% endif %}
-      </div>
     </div>
-  </div>
-</section>
+</div>
 {% endblock %}

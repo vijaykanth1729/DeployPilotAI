@@ -1,252 +1,1406 @@
 import os
-import json
 import re
-from datetime import datetime
+import uuid
+import json
+import shutil
+import subprocess
+from datetime import datetime, timezone
 from functools import wraps
 
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
+from flask import (
+    Flask, render_template, request, redirect, url_for,
+    flash, jsonify, session, abort
+)
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_login import (
+    LoginManager, UserMixin, login_user, logout_user,
+    login_required, current_user
+)
 import bcrypt
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-prod')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///deploypilot.db')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'infraaudit-dev-secret-key-change-in-prod')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///infraaudit.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024  # 2MB max upload
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
+login_manager.login_message_category = 'info'
 
-# ─── MODELS ───────────────────────────────────────────────────────────────────
+# ============================================================
+# MODELS
+# ============================================================
 
 class User(UserMixin, db.Model):
+    __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    name = db.Column(db.String(80), nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    analyses = db.relationship('Analysis', backref='user', lazy=True)
+    email = db.Column(db.String(255), unique=True, nullable=False)
+    name = db.Column(db.String(255), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    github_token = db.Column(db.String(500), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    projects = db.relationship('Project', backref='owner', lazy=True, cascade='all, delete-orphan')
 
-class Analysis(db.Model):
+    def set_password(self, password):
+        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+    def check_password(self, password):
+        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
+
+
+class Project(db.Model):
+    __tablename__ = 'projects'
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    file_type = db.Column(db.String(30), nullable=False)
-    input_code = db.Column(db.Text, nullable=False)
-    result = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    name = db.Column(db.String(255), nullable=False)
+    repo_url = db.Column(db.String(500), nullable=True)
+    last_scan_at = db.Column(db.DateTime, nullable=True)
+    risk_score = db.Column(db.Integer, default=100)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    scans = db.relationship('Scan', backref='project', lazy=True, cascade='all, delete-orphan')
+
+
+class Scan(db.Model):
+    __tablename__ = 'scans'
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    status = db.Column(db.String(50), default='completed')
+    risk_score = db.Column(db.Integer, default=100)
+    findings_count = db.Column(db.Integer, default=0)
+    critical_count = db.Column(db.Integer, default=0)
+    high_count = db.Column(db.Integer, default=0)
+    medium_count = db.Column(db.Integer, default=0)
+    low_count = db.Column(db.Integer, default=0)
+    info_count = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    findings = db.relationship('Finding', backref='scan', lazy=True, cascade='all, delete-orphan')
+
+
+class Finding(db.Model):
+    __tablename__ = 'findings'
+    id = db.Column(db.Integer, primary_key=True)
+    scan_id = db.Column(db.Integer, db.ForeignKey('scans.id'), nullable=False)
+    severity = db.Column(db.String(20), nullable=False)
+    category = db.Column(db.String(50), nullable=False)
+    title = db.Column(db.String(500), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    recommendation = db.Column(db.Text, nullable=False)
+    file_path = db.Column(db.String(500), nullable=True)
+    line_number = db.Column(db.Integer, nullable=True)
+    framework = db.Column(db.String(50), nullable=True)
+
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# ─── AI ANALYSIS ENGINE (Mock + Real) ─────────────────────────────────────────
 
-def analyze_code(code, file_type):
-    """Analyze code and return structured findings. Uses mock AI for MVP."""
+# ============================================================
+# ANALYSIS ENGINE
+# ============================================================
+
+def analyze_kubernetes(content, file_path='unknown'):
+    """Analyze Kubernetes YAML files for security issues."""
     findings = []
+    lines = content.split('\n')
 
+    # Check 1: Missing resource limits
+    has_resources = bool(re.search(r'resources:\s*\n\s+(limits|requests):', content))
+    if 'containers:' in content or 'container:' in content:
+        if not has_resources:
+            line_num = next((i+1 for i, l in enumerate(lines) if 'containers:' in l or 'container:' in l), 1)
+            findings.append({
+                'severity': 'high',
+                'category': 'reliability',
+                'title': 'Missing Resource Limits',
+                'description': 'Container does not define CPU/memory resource limits. This can lead to resource exhaustion and noisy neighbor issues.',
+                'recommendation': 'Add resources.limits and resources.requests with appropriate CPU and memory values.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 2: Missing liveness/readiness probes
+    if 'containers:' in content:
+        if not re.search(r'livenessProbe:', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'containers:' in l), 1)
+            findings.append({
+                'severity': 'medium',
+                'category': 'reliability',
+                'title': 'Missing Liveness Probe',
+                'description': 'No liveness probe configured. Kubernetes cannot detect if the application is in a broken state.',
+                'recommendation': 'Add a livenessProbe with appropriate httpGet, tcpSocket, or exec check.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'CIS-K8S-1.8'
+            })
+        if not re.search(r'readinessProbe:', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'containers:' in l), 1)
+            findings.append({
+                'severity': 'medium',
+                'category': 'reliability',
+                'title': 'Missing Readiness Probe',
+                'description': 'No readiness probe configured. Traffic may be sent to pods that are not ready to serve.',
+                'recommendation': 'Add a readinessProbe to ensure traffic is only routed to healthy pods.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 3: Security context - runAsNonRoot
+    if 'containers:' in content:
+        if not re.search(r'runAsNonRoot:\s*true', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'containers:' in l), 1)
+            findings.append({
+                'severity': 'critical',
+                'category': 'security',
+                'title': 'Container Running as Root',
+                'description': 'securityContext.runAsNonRoot is not set to true. Containers running as root pose a significant security risk.',
+                'recommendation': 'Add securityContext.runAsNonRoot: true to the pod or container spec.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 4: Privileged container
+    if re.search(r'privileged:\s*true', content):
+        line_num = next((i+1 for i, l in enumerate(lines) if 'privileged:' in l and 'true' in l), 1)
+        findings.append({
+            'severity': 'critical',
+            'category': 'security',
+            'title': 'Privileged Container Detected',
+            'description': 'Container is running in privileged mode, granting full access to the host system.',
+            'recommendation': 'Remove privileged: true unless absolutely necessary. Use specific capabilities instead.',
+            'file_path': file_path,
+            'line_number': line_num,
+            'framework': 'CIS-K8S-1.8'
+        })
+
+    # Check 5: Using latest tag
+    latest_matches = re.finditer(r'image:\s*\S+:latest', content)
+    for match in latest_matches:
+        line_num = content[:match.start()].count('\n') + 1
+        findings.append({
+            'severity': 'medium',
+            'category': 'reliability',
+            'title': 'Using :latest Image Tag',
+            'description': 'Image uses :latest tag which is mutable and can lead to unexpected deployments.',
+            'recommendation': 'Pin images to specific versions or SHA digests for reproducible deployments.',
+            'file_path': file_path,
+            'line_number': line_num,
+            'framework': 'CIS-K8S-1.8'
+        })
+
+    # Check 6: No image tag at all
+    no_tag_matches = re.finditer(r'image:\s*([^\s:]+)\s*$', content, re.MULTILINE)
+    for match in no_tag_matches:
+        if ':' not in match.group(1):
+            line_num = content[:match.start()].count('\n') + 1
+            findings.append({
+                'severity': 'medium',
+                'category': 'reliability',
+                'title': 'Image Without Tag',
+                'description': 'Image reference has no tag specified, defaulting to :latest.',
+                'recommendation': 'Always specify an explicit image tag or SHA digest.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 7: Missing namespace
+    if re.search(r'kind:\s*(Deployment|StatefulSet|DaemonSet|Pod|Service)', content):
+        if not re.search(r'namespace:', content):
+            findings.append({
+                'severity': 'low',
+                'category': 'best-practice',
+                'title': 'No Namespace Specified',
+                'description': 'Resource does not specify a namespace, will be deployed to the default namespace.',
+                'recommendation': 'Specify a namespace in metadata to organize resources and apply RBAC policies.',
+                'file_path': file_path,
+                'line_number': 1,
+                'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 8: RBAC - ClusterRoleBinding with cluster-admin
+    if re.search(r'kind:\s*ClusterRoleBinding', content):
+        if re.search(r'name:\s*cluster-admin', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'cluster-admin' in l), 1)
+            findings.append({
+                'severity': 'critical',
+                'category': 'security',
+                'title': 'ClusterRoleBinding to cluster-admin',
+                'description': 'Binding grants cluster-admin privileges which provides unrestricted access to the cluster.',
+                'recommendation': 'Use least-privilege RBAC roles. Create custom ClusterRoles with only necessary permissions.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 9: Missing NetworkPolicy
+    if re.search(r'kind:\s*(Deployment|StatefulSet|Pod)', content):
+        if not re.search(r'kind:\s*NetworkPolicy', content):
+            findings.append({
+                'severity': 'medium',
+                'category': 'security',
+                'title': 'No NetworkPolicy Defined',
+                'description': 'No NetworkPolicy found. All pods can communicate freely without network segmentation.',
+                'recommendation': 'Define NetworkPolicy resources to restrict pod-to-pod communication.',
+                'file_path': file_path,
+                'line_number': 1,
+                'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 10: hostNetwork enabled
+    if re.search(r'hostNetwork:\s*true', content):
+        line_num = next((i+1 for i, l in enumerate(lines) if 'hostNetwork:' in l and 'true' in l), 1)
+        findings.append({
+            'severity': 'high',
+            'category': 'security',
+            'title': 'Host Network Enabled',
+            'description': 'Pod uses host network namespace, bypassing network isolation.',
+            'recommendation': 'Remove hostNetwork: true unless the pod specifically needs host network access.',
+            'file_path': file_path,
+            'line_number': line_num,
+            'framework': 'CIS-K8S-1.8'
+        })
+
+    # Check 11: hostPID enabled
+    if re.search(r'hostPID:\s*true', content):
+        line_num = next((i+1 for i, l in enumerate(lines) if 'hostPID:' in l and 'true' in l), 1)
+        findings.append({
+            'severity': 'high',
+            'category': 'security',
+            'title': 'Host PID Namespace Shared',
+            'description': 'Pod shares the host PID namespace, allowing visibility into host processes.',
+            'recommendation': 'Remove hostPID: true to maintain process isolation.',
+            'file_path': file_path,
+            'line_number': line_num,
+            'framework': 'CIS-K8S-1.8'
+        })
+
+    # Check 12: Secrets in environment variables
+    env_secret_patterns = re.finditer(r'(PASSWORD|SECRET|API_KEY|TOKEN|CREDENTIALS)\s*[:=]', content, re.IGNORECASE)
+    for match in env_secret_patterns:
+        if not re.search(r'secretKeyRef|valueFrom', content[max(0, match.start()-100):match.start()+200]):
+            line_num = content[:match.start()].count('\n') + 1
+            findings.append({
+                'severity': 'high',
+                'category': 'security',
+                'title': 'Potential Secret in Plain Text',
+                'description': f'Sensitive value ({match.group(1)}) may be hardcoded instead of using Kubernetes Secrets.',
+                'recommendation': 'Use Kubernetes Secrets with secretKeyRef or external secret management (Vault, AWS Secrets Manager).',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 13: Missing PodDisruptionBudget reference
+    if re.search(r'kind:\s*Deployment', content):
+        if re.search(r'replicas:\s*[2-9]', content) and not re.search(r'PodDisruptionBudget', content):
+            findings.append({
+                'severity': 'low',
+                'category': 'reliability',
+                'title': 'No PodDisruptionBudget',
+                'description': 'Multi-replica deployment without PodDisruptionBudget. Voluntary disruptions may take down all pods.',
+                'recommendation': 'Create a PodDisruptionBudget to ensure minimum availability during disruptions.',
+                'file_path': file_path,
+                'line_number': 1,
+                'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 14: allowPrivilegeEscalation not set to false
+    if 'containers:' in content:
+        if not re.search(r'allowPrivilegeEscalation:\s*false', content):
+            findings.append({
+                'severity': 'high',
+                'category': 'security',
+                'title': 'Privilege Escalation Not Disabled',
+                'description': 'allowPrivilegeEscalation is not explicitly set to false, allowing potential privilege escalation.',
+                'recommendation': 'Set securityContext.allowPrivilegeEscalation: false on all containers.',
+                'file_path': file_path,
+                'line_number': 1,
+                'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 15: readOnlyRootFilesystem not set
+    if 'containers:' in content:
+        if not re.search(r'readOnlyRootFilesystem:\s*true', content):
+            findings.append({
+                'severity': 'medium',
+                'category': 'security',
+                'title': 'Writable Root Filesystem',
+                'description': 'Root filesystem is not set to read-only, allowing potential file system modifications by attackers.',
+                'recommendation': 'Set securityContext.readOnlyRootFilesystem: true and use emptyDir volumes for writable paths.',
+                'file_path': file_path,
+                'line_number': 1,
+                'framework': 'CIS-K8S-1.8'
+            })
+
+    return findings
+
+
+def analyze_terraform(content, file_path='unknown'):
+    """Analyze Terraform files for security and best practice issues."""
+    findings = []
+    lines = content.split('\n')
+
+    # Check 1: No remote backend
+    if re.search(r'terraform\s*{', content):
+        if not re.search(r'backend\s+"(s3|azurerm|gcs|remote|consul)"', content):
+            findings.append({
+                'severity': 'high',
+                'category': 'security',
+                'title': 'No Remote Backend Configured',
+                'description': 'Terraform state is stored locally. This prevents team collaboration and risks state loss.',
+                'recommendation': 'Configure a remote backend (S3, Azure Blob, GCS) with state locking enabled.',
+                'file_path': file_path,
+                'line_number': 1,
+                'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 2: S3 bucket without encryption
+    s3_blocks = re.finditer(r'resource\s+"aws_s3_bucket"\s+"(\w+)"', content)
+    for match in s3_blocks:
+        bucket_name = match.group(1)
+        block_start = match.start()
+        # Look for encryption configuration in the next 500 chars or separate resource
+        nearby = content[block_start:block_start+1000]
+        if not re.search(r'server_side_encryption_configuration|aws_s3_bucket_server_side_encryption', content):
+            line_num = content[:block_start].count('\n') + 1
+            findings.append({
+                'severity': 'high',
+                'category': 'security',
+                'title': f'S3 Bucket Without Encryption ({bucket_name})',
+                'description': 'S3 bucket does not have server-side encryption configured.',
+                'recommendation': 'Add server_side_encryption_configuration with AES256 or aws:kms algorithm.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 3: S3 bucket without versioning
+    if re.search(r'resource\s+"aws_s3_bucket"', content):
+        if not re.search(r'versioning\s*{[^}]*enabled\s*=\s*true|aws_s3_bucket_versioning', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'aws_s3_bucket' in l), 1)
+            findings.append({
+                'severity': 'medium',
+                'category': 'reliability',
+                'title': 'S3 Bucket Without Versioning',
+                'description': 'S3 bucket does not have versioning enabled. Data loss from accidental deletion is possible.',
+                'recommendation': 'Enable versioning on S3 buckets to protect against accidental data loss.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'AWS-WA-REL'
+            })
+
+    # Check 4: Missing tags
+    resource_blocks = re.finditer(r'resource\s+"aws_\w+"\s+"(\w+)"', content)
+    for match in resource_blocks:
+        block_start = match.start()
+        # Find the closing brace of this resource block
+        brace_count = 0
+        block_end = block_start
+        for i in range(block_start, min(block_start+2000, len(content))):
+            if content[i] == '{':
+                brace_count += 1
+            elif content[i] == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    block_end = i
+                    break
+        block_content = content[block_start:block_end]
+        if 'tags' not in block_content:
+            line_num = content[:block_start].count('\n') + 1
+            findings.append({
+                'severity': 'low',
+                'category': 'cost',
+                'title': f'Resource Missing Tags ({match.group(1)})',
+                'description': 'Resource does not have tags defined. Tags are essential for cost allocation and resource management.',
+                'recommendation': 'Add tags including Environment, Team, Project, and ManagedBy.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'AWS-WA-COST'
+            })
+        break  # Only report once to avoid noise
+
+    # Check 5: Provider without version constraint
+    if re.search(r'provider\s+"', content):
+        if not re.search(r'required_providers|version\s*=', content):
+            findings.append({
+                'severity': 'medium',
+                'category': 'reliability',
+                'title': 'Provider Without Version Constraint',
+                'description': 'Provider does not have a version constraint. Upgrades may introduce breaking changes.',
+                'recommendation': 'Pin provider versions in required_providers block with version constraints.',
+                'file_path': file_path,
+                'line_number': 1,
+                'framework': 'AWS-WA-REL'
+            })
+
+    # Check 6: No state locking (DynamoDB for S3 backend)
+    if re.search(r'backend\s+"s3"', content):
+        if not re.search(r'dynamodb_table', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'backend' in l and 's3' in l), 1)
+            findings.append({
+                'severity': 'high',
+                'category': 'reliability',
+                'title': 'S3 Backend Without State Locking',
+                'description': 'S3 backend does not configure DynamoDB table for state locking. Concurrent operations may corrupt state.',
+                'recommendation': 'Add dynamodb_table parameter to the S3 backend configuration.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'AWS-WA-REL'
+            })
+
+    # Check 7: RDS without deletion protection
+    if re.search(r'resource\s+"aws_db_instance"', content):
+        if not re.search(r'deletion_protection\s*=\s*true', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'aws_db_instance' in l), 1)
+            findings.append({
+                'severity': 'high',
+                'category': 'reliability',
+                'title': 'RDS Without Deletion Protection',
+                'description': 'RDS instance does not have deletion protection enabled. Accidental terraform destroy will delete the database.',
+                'recommendation': 'Set deletion_protection = true on production RDS instances.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'AWS-WA-REL'
+            })
+
+    # Check 8: RDS without encryption
+    if re.search(r'resource\s+"aws_db_instance"', content):
+        if not re.search(r'storage_encrypted\s*=\s*true', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'aws_db_instance' in l), 1)
+            findings.append({
+                'severity': 'high',
+                'category': 'security',
+                'title': 'RDS Without Encryption at Rest',
+                'description': 'RDS instance does not have storage encryption enabled.',
+                'recommendation': 'Set storage_encrypted = true and specify a KMS key.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 9: Security group with 0.0.0.0/0 ingress
+    if re.search(r'cidr_blocks\s*=\s*\["0\.0\.0\.0/0"\]', content):
+        line_num = next((i+1 for i, l in enumerate(lines) if '0.0.0.0/0' in l), 1)
+        findings.append({
+            'severity': 'critical',
+            'category': 'security',
+            'title': 'Security Group Open to World',
+            'description': 'Security group allows ingress from 0.0.0.0/0 (all IPs). This exposes the resource to the internet.',
+            'recommendation': 'Restrict CIDR blocks to known IP ranges or use security group references.',
+            'file_path': file_path,
+            'line_number': line_num,
+            'framework': 'AWS-WA-SEC'
+        })
+
+    # Check 10: Sensitive variable without sensitive flag
+    sensitive_vars = re.finditer(r'variable\s+"(password|secret|token|key|credentials)\w*"', content, re.IGNORECASE)
+    for match in sensitive_vars:
+        var_start = match.start()
+        var_block = content[var_start:var_start+300]
+        if 'sensitive' not in var_block or 'sensitive = true' not in var_block.replace(' ', '').replace('=', ' = '):
+            line_num = content[:var_start].count('\n') + 1
+            findings.append({
+                'severity': 'medium',
+                'category': 'security',
+                'title': f'Sensitive Variable Not Marked ({match.group(1)})',
+                'description': 'Variable containing sensitive data is not marked with sensitive = true.',
+                'recommendation': 'Add sensitive = true to prevent the value from being displayed in logs and output.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 11: Hardcoded credentials
+    cred_patterns = re.finditer(r'(access_key|secret_key|password|token)\s*=\s*"[^"]{8,}"', content, re.IGNORECASE)
+    for match in cred_patterns:
+        if 'var.' not in match.group(0) and 'data.' not in match.group(0):
+            line_num = content[:match.start()].count('\n') + 1
+            findings.append({
+                'severity': 'critical',
+                'category': 'security',
+                'title': 'Hardcoded Credentials Detected',
+                'description': 'Credentials appear to be hardcoded in the Terraform configuration.',
+                'recommendation': 'Use variables, environment variables, or a secrets manager instead of hardcoding credentials.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 12: CloudWatch logging not enabled
+    if re.search(r'resource\s+"aws_(lb|alb|elb|cloudfront_distribution)"', content):
+        if not re.search(r'access_logs|logging_config', content):
+            findings.append({
+                'severity': 'medium',
+                'category': 'compliance',
+                'title': 'Access Logging Not Enabled',
+                'description': 'Load balancer or CDN does not have access logging configured.',
+                'recommendation': 'Enable access logs for audit trail and security monitoring.',
+                'file_path': file_path,
+                'line_number': 1,
+                'framework': 'AWS-WA-SEC'
+            })
+
+    return findings
+
+
+def analyze_dockerfile(content, file_path='unknown'):
+    """Analyze Dockerfile for security and best practice issues."""
+    findings = []
+    lines = content.split('\n')
+
+    # Check 1: Using latest tag in FROM
+    from_latest = re.finditer(r'^FROM\s+(\S+):latest', content, re.MULTILINE)
+    for match in from_latest:
+        line_num = content[:match.start()].count('\n') + 1
+        findings.append({
+            'severity': 'medium',
+            'category': 'reliability',
+            'title': 'Base Image Uses :latest Tag',
+            'description': f'FROM {match.group(1)}:latest — using :latest tag makes builds non-reproducible.',
+            'recommendation': 'Pin base image to a specific version tag or SHA256 digest.',
+            'file_path': file_path,
+            'line_number': line_num,
+            'framework': 'DOCKER-CIS'
+        })
+
+    # Check 2: FROM without tag
+    from_no_tag = re.finditer(r'^FROM\s+([a-zA-Z0-9_/.-]+)\s*$', content, re.MULTILINE)
+    for match in from_no_tag:
+        if ':' not in match.group(1) and '@' not in match.group(1):
+            line_num = content[:match.start()].count('\n') + 1
+            findings.append({
+                'severity': 'medium',
+                'category': 'reliability',
+                'title': 'Base Image Without Version Tag',
+                'description': f'FROM {match.group(1)} — no tag specified, defaults to :latest.',
+                'recommendation': 'Specify an explicit version tag for the base image.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'DOCKER-CIS'
+            })
+
+    # Check 3: Running as root (no USER instruction)
+    if not re.search(r'^USER\s+\S+', content, re.MULTILINE):
+        findings.append({
+            'severity': 'high',
+            'category': 'security',
+            'title': 'Container Runs as Root',
+            'description': 'No USER instruction found. Container will run as root by default.',
+            'recommendation': 'Add USER instruction to run as a non-root user (e.g., USER 1001 or USER appuser).',
+            'file_path': file_path,
+            'line_number': len(lines),
+            'framework': 'DOCKER-CIS'
+        })
+
+    # Check 4: Using ADD instead of COPY
+    add_instructions = re.finditer(r'^ADD\s+', content, re.MULTILINE)
+    for match in add_instructions:
+        # ADD is okay for URLs and tar extraction
+        add_line = content[match.start():content.find('\n', match.start())]
+        if 'http' not in add_line and '.tar' not in add_line and '.gz' not in add_line:
+            line_num = content[:match.start()].count('\n') + 1
+            findings.append({
+                'severity': 'low',
+                'category': 'best-practice',
+                'title': 'Use COPY Instead of ADD',
+                'description': 'ADD has implicit tar extraction and URL fetching. COPY is more explicit and predictable.',
+                'recommendation': 'Replace ADD with COPY unless you specifically need tar extraction or URL fetching.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'DOCKER-CIS'
+            })
+
+    # Check 5: No HEALTHCHECK
+    if not re.search(r'^HEALTHCHECK\s+', content, re.MULTILINE):
+        findings.append({
+            'severity': 'low',
+            'category': 'reliability',
+            'title': 'No HEALTHCHECK Instruction',
+            'description': 'Dockerfile does not define a HEALTHCHECK. Container orchestrators cannot determine container health.',
+            'recommendation': 'Add HEALTHCHECK instruction (e.g., HEALTHCHECK CMD curl -f http://localhost/ || exit 1).',
+            'file_path': file_path,
+            'line_number': len(lines),
+            'framework': 'DOCKER-CIS'
+        })
+
+    # Check 6: Not using multi-stage build
+    from_count = len(re.findall(r'^FROM\s+', content, re.MULTILINE))
+    if from_count == 1 and ('RUN.*install' in content or 'RUN.*build' in content):
+        findings.append({
+            'severity': 'low',
+            'category': 'performance',
+            'title': 'Consider Multi-Stage Build',
+            'description': 'Single-stage build with install/build steps. Multi-stage builds reduce final image size.',
+            'recommendation': 'Use multi-stage builds to separate build dependencies from runtime image.',
+            'file_path': file_path,
+            'line_number': 1,
+            'framework': 'DOCKER-CIS'
+        })
+
+    # Check 7: Secrets in build args or ENV
+    secret_patterns = re.finditer(r'^(ARG|ENV)\s+(PASSWORD|SECRET|API_KEY|TOKEN|PRIVATE_KEY)\s*=', content, re.MULTILINE | re.IGNORECASE)
+    for match in secret_patterns:
+        line_num = content[:match.start()].count('\n') + 1
+        findings.append({
+            'severity': 'critical',
+            'category': 'security',
+            'title': 'Secret Exposed in Dockerfile',
+            'description': f'{match.group(1)} contains sensitive value ({match.group(2)}). This is baked into the image layer.',
+            'recommendation': 'Use Docker BuildKit secrets (--mount=type=secret) or runtime environment variables instead.',
+            'file_path': file_path,
+            'line_number': line_num,
+            'framework': 'DOCKER-CIS'
+        })
+
+    # Check 8: COPY . . without .dockerignore consideration
+    if re.search(r'^COPY\s+\.\s+\.', content, re.MULTILINE):
+        line_num = next((i+1 for i, l in enumerate(lines) if re.match(r'COPY\s+\.\s+\.', l)), 1)
+        findings.append({
+            'severity': 'medium',
+            'category': 'security',
+            'title': 'Broad COPY Statement',
+            'description': 'COPY . . copies entire build context including potentially sensitive files (.env, .git, etc.).',
+            'recommendation': 'Use specific COPY paths or ensure .dockerignore excludes sensitive files.',
+            'file_path': file_path,
+            'line_number': line_num,
+            'framework': 'DOCKER-CIS'
+        })
+
+    return findings
+
+
+def analyze_cicd(content, file_path='unknown'):
+    """Analyze CI/CD pipeline files for security issues."""
+    findings = []
+    lines = content.split('\n')
+
+    # Check 1: Hardcoded secrets
+    secret_patterns = re.finditer(
+        r'(password|secret|token|api_key|aws_access_key|aws_secret)\s*[:=]\s*["\']([^"\']{8,})["\']',
+        content, re.IGNORECASE
+    )
+    for match in secret_patterns:
+        # Skip if it's a reference to a secret store
+        context = content[max(0, match.start()-50):match.end()+50]
+        if 'secrets.' not in context and '${{' not in context and 'vault' not in context.lower():
+            line_num = content[:match.start()].count('\n') + 1
+            findings.append({
+                'severity': 'critical',
+                'category': 'security',
+                'title': 'Hardcoded Secret in Pipeline',
+                'description': f'Potential hardcoded secret ({match.group(1)}) found in CI/CD configuration.',
+                'recommendation': 'Use CI/CD secret management (GitHub Secrets, GitLab CI Variables, etc.) instead of hardcoding.',
+                'file_path': file_path,
+                'line_number': line_num,
+                'framework': 'CICD-SEC'
+            })
+
+    # Check 2: No caching configured
+    if re.search(r'(steps|jobs|stages):', content):
+        if not re.search(r'(cache|actions/cache|restore_cache|save_cache)', content):
+            findings.append({
+                'severity': 'low',
+                'category': 'performance',
+                'title': 'No Caching Configured',
+                'description': 'Pipeline does not use caching. Build times may be unnecessarily long.',
+                'recommendation': 'Add caching for dependencies (node_modules, pip cache, Maven repository, etc.).',
+                'file_path': file_path,
+                'line_number': 1,
+                'framework': 'CICD-SEC'
+            })
+
+    # Check 3: No timeout configured
+    if re.search(r'(jobs|stages):', content):
+        if not re.search(r'timeout|time_limit|timeout-minutes', content):
+            findings.append({
+                'severity': 'low',
+                'category': 'reliability',
+                'title': 'No Pipeline Timeout',
+                'description': 'No timeout configured. Stuck pipelines may consume resources indefinitely.',
+                'recommendation': 'Set timeout-minutes on jobs to prevent runaway builds.',
+                'file_path': file_path,
+                'line_number': 1,
+                'framework': 'CICD-SEC'
+            })
+
+    # Check 4: No test step
+    if not re.search(r'(run:.*test|pytest|jest|mocha|npm test|go test|mvn test|gradle test)', content, re.IGNORECASE):
+        findings.append({
+            'severity': 'medium',
+            'category': 'reliability',
+            'title': 'No Test Step in Pipeline',
+            'description': 'Pipeline does not appear to run tests. Code may be deployed without verification.',
+            'recommendation': 'Add a test step to validate code before deployment.',
+            'file_path': file_path,
+            'line_number': 1,
+            'framework': 'CICD-SEC'
+        })
+
+    # Check 5: No PR trigger (GitHub Actions specific)
+    if '.github/workflows' in file_path or 'on:' in content:
+        if not re.search(r'pull_request|merge_request', content):
+            findings.append({
+                'severity': 'medium',
+                'category': 'best-practice',
+                'title': 'No Pull Request Trigger',
+                'description': 'Pipeline does not trigger on pull requests. Changes may not be validated before merge.',
+                'recommendation': 'Add pull_request trigger to validate changes before merging.',
+                'file_path': file_path,
+                'line_number': 1,
+                'framework': 'CICD-SEC'
+            })
+
+    # Check 6: No artifact/image scanning
+    if re.search(r'(docker.*build|docker.*push|image)', content, re.IGNORECASE):
+        if not re.search(r'(trivy|snyk|grype|anchore|scan|vulnerability)', content, re.IGNORECASE):
+            findings.append({
+                'severity': 'high',
+                'category': 'security',
+                'title': 'No Container Image Scanning',
+                'description': 'Pipeline builds/pushes container images without vulnerability scanning.',
+                'recommendation': 'Add image scanning step using Trivy, Snyk, or Grype before pushing images.',
+                'file_path': file_path,
+                'line_number': 1,
+                'framework': 'CICD-SEC'
+            })
+
+    # Check 7: Using third-party actions without pinning (GitHub Actions)
+    unpinned_actions = re.finditer(r'uses:\s*([^@\s]+)@(master|main|v\d+)\s*$', content, re.MULTILINE)
+    for match in unpinned_actions:
+        line_num = content[:match.start()].count('\n') + 1
+        findings.append({
+            'severity': 'medium',
+            'category': 'security',
+            'title': 'Unpinned GitHub Action',
+            'description': f'Action {match.group(1)} uses branch/tag reference instead of SHA pin.',
+            'recommendation': 'Pin actions to full SHA commit hash to prevent supply chain attacks.',
+            'file_path': file_path,
+            'line_number': line_num,
+            'framework': 'CICD-SEC'
+        })
+
+    # Check 8: No environment protection for deploy
+    if re.search(r'(deploy|production|release)', content, re.IGNORECASE):
+        if not re.search(r'environment:|approval|manual', content, re.IGNORECASE):
+            findings.append({
+                'severity': 'high',
+                'category': 'security',
+                'title': 'No Environment Protection for Deployment',
+                'description': 'Deployment step does not use environment protection rules or manual approval.',
+                'recommendation': 'Add environment protection with required reviewers for production deployments.',
+                'file_path': file_path,
+                'line_number': 1,
+                'framework': 'CICD-SEC'
+            })
+
+    return findings
+
+
+def detect_file_type(file_path, content=''):
+    """Detect the type of infrastructure file."""
+    path_lower = file_path.lower()
+    if path_lower.endswith('.tf'):
+        return 'terraform'
+    elif path_lower.endswith('dockerfile') or 'dockerfile' in path_lower:
+        return 'dockerfile'
+    elif '.github/workflows' in path_lower or 'jenkinsfile' in path_lower.lower():
+        return 'cicd'
+    elif path_lower.endswith(('.yaml', '.yml')):
+        # Check content to determine if it's Kubernetes or CI/CD
+        if any(kw in content for kw in ['apiVersion:', 'kind: Deployment', 'kind: Service', 'kind: Pod',
+                                          'kind: StatefulSet', 'kind: DaemonSet', 'kind: ConfigMap',
+                                          'kind: Ingress', 'kind: NetworkPolicy', 'kind: ClusterRole']):
+            return 'kubernetes'
+        elif any(kw in content for kw in ['stages:', 'pipeline:', 'jobs:', 'steps:', 'on:']):
+            return 'cicd'
+        else:
+            return 'kubernetes'  # Default YAML to kubernetes
+    return None
+
+
+def analyze_content(content, file_type, file_path='unknown'):
+    """Route content to the appropriate analyzer."""
     if file_type == 'kubernetes':
-        findings = analyze_kubernetes(code)
+        return analyze_kubernetes(content, file_path)
     elif file_type == 'terraform':
-        findings = analyze_terraform(code)
+        return analyze_terraform(content, file_path)
     elif file_type == 'dockerfile':
-        findings = analyze_dockerfile(code)
+        return analyze_dockerfile(content, file_path)
     elif file_type == 'cicd':
-        findings = analyze_cicd(code)
-    elif file_type == 'logs':
-        findings = analyze_logs(code)
-    else:
-        findings = [{"severity": "info", "title": "Unknown file type", "description": "Could not determine file type. Please select the correct type.", "recommendation": "Choose the appropriate file type from the dropdown."}]
-
-    if not findings:
-        findings = [{"severity": "success", "title": "No issues detected", "description": "Your configuration looks good! No critical issues found.", "recommendation": "Continue following best practices."}]
-
-    return findings
+        return analyze_cicd(content, file_path)
+    return []
 
 
-def analyze_kubernetes(code):
-    findings = []
-    if 'resources' not in code:
-        findings.append({"severity": "high", "title": "Missing Resource Limits", "description": "No CPU/memory resource requests or limits defined. This can lead to resource contention and OOM kills in production.", "recommendation": "Add resources.requests and resources.limits to all containers. Example: cpu: 100m, memory: 128Mi"})
-    if 'livenessProbe' not in code and 'readinessProbe' not in code:
-        findings.append({"severity": "high", "title": "Missing Health Probes", "description": "No liveness or readiness probes configured. Kubernetes cannot detect unhealthy pods or route traffic correctly.", "recommendation": "Add livenessProbe and readinessProbe with appropriate httpGet or tcpSocket checks."})
-    if 'latest' in code:
-        findings.append({"severity": "medium", "title": "Using :latest Tag", "description": "Image tag ':latest' is mutable and non-deterministic. Deployments may pull different images on different nodes.", "recommendation": "Use immutable tags like semantic versions (v1.2.3) or SHA digests for reproducible deployments."})
-    if 'securityContext' not in code:
-        findings.append({"severity": "medium", "title": "Missing Security Context", "description": "No securityContext defined. Containers may run as root, increasing attack surface.", "recommendation": "Add securityContext with runAsNonRoot: true, readOnlyRootFilesystem: true, and drop ALL capabilities."})
-    if 'namespace' not in code:
-        findings.append({"severity": "low", "title": "No Namespace Specified", "description": "Resources will deploy to the 'default' namespace. This makes multi-tenant management difficult.", "recommendation": "Always specify a namespace explicitly in metadata or use kubectl -n flag."})
-    if 'replicas' in code:
-        match = re.search(r'replicas:\s*(\d+)', code)
-        if match and int(match.group(1)) < 2:
-            findings.append({"severity": "medium", "title": "Single Replica Deployment", "description": "Only 1 replica configured. No high availability — a single pod failure causes downtime.", "recommendation": "Set replicas to at least 2 for production workloads. Consider HPA for auto-scaling."})
-    return findings
+def calculate_risk_score(findings):
+    """Calculate risk score from findings. Score = max(0, 100 - total_points)."""
+    points = 0
+    for f in findings:
+        severity = f.get('severity', 'info')
+        if severity == 'critical':
+            points += 10
+        elif severity == 'high':
+            points += 5
+        elif severity == 'medium':
+            points += 2
+        elif severity == 'low':
+            points += 1
+    return max(0, 100 - points)
 
 
-def analyze_terraform(code):
-    findings = []
-    if 'backend' not in code:
-        findings.append({"severity": "high", "title": "No Remote Backend Configured", "description": "Terraform state is stored locally. This prevents team collaboration and risks state loss.", "recommendation": "Configure an S3 backend with DynamoDB locking: backend \"s3\" { bucket, key, region, dynamodb_table }"})
-    if 'encrypt' not in code and 's3' in code:
-        findings.append({"severity": "high", "title": "S3 Bucket Not Encrypted", "description": "S3 bucket resource found without server-side encryption. Data at rest is unprotected.", "recommendation": "Add server_side_encryption_configuration with AES256 or aws:kms algorithm."})
-    if 'versioning' not in code and 'aws_s3_bucket' in code:
-        findings.append({"severity": "medium", "title": "S3 Versioning Disabled", "description": "Bucket versioning not enabled. Accidental deletions or overwrites cannot be recovered.", "recommendation": "Enable versioning: versioning { enabled = true }"})
-    if 'tags' not in code:
-        findings.append({"severity": "low", "title": "Missing Resource Tags", "description": "No tags defined on resources. This makes cost allocation and resource tracking difficult.", "recommendation": "Add tags block with at minimum: Environment, Project, Owner, ManagedBy=terraform"})
-    if 'variable' in code and 'default' in code:
-        findings.append({"severity": "info", "title": "Variables Have Defaults", "description": "Some variables have default values. Ensure sensitive values like passwords don't have defaults.", "recommendation": "Remove defaults from sensitive variables and use terraform.tfvars or environment variables."})
-    if 'provider' in code and 'version' not in code and 'required_providers' not in code:
-        findings.append({"severity": "medium", "title": "Provider Version Not Pinned", "description": "Provider version not constrained. Terraform may download breaking changes on next init.", "recommendation": "Pin provider versions in required_providers block: version = \"~> 5.0\""})
-    return findings
+def count_by_severity(findings):
+    """Count findings by severity level."""
+    counts = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
+    for f in findings:
+        sev = f.get('severity', 'info')
+        if sev in counts:
+            counts[sev] += 1
+    return counts
 
 
-def analyze_dockerfile(code):
-    findings = []
-    if 'FROM' in code and 'latest' in code:
-        findings.append({"severity": "high", "title": "Using :latest Base Image", "description": "Base image uses :latest tag. Builds are non-reproducible and may break unexpectedly.", "recommendation": "Pin to a specific version: FROM node:20-alpine or FROM python:3.12-slim"})
-    if 'ROOT' in code.upper() or ('USER' not in code and 'FROM' in code):
-        findings.append({"severity": "high", "title": "Running as Root", "description": "Container runs as root user. If compromised, attacker has full container access.", "recommendation": "Add USER directive: RUN adduser -D appuser && USER appuser"})
-    if 'COPY . .' in code or 'ADD . .' in code:
-        findings.append({"severity": "medium", "title": "Copying Entire Context", "description": "COPY . . includes unnecessary files (node_modules, .git, secrets). Increases image size and attack surface.", "recommendation": "Use .dockerignore file and copy only needed files. Use multi-stage builds."})
-    if code.count('RUN') > 5:
-        findings.append({"severity": "medium", "title": "Too Many RUN Layers", "description": f"Found {code.count('RUN')} RUN instructions. Each creates a layer, increasing image size.", "recommendation": "Chain commands with && in a single RUN instruction to reduce layers."})
-    if 'HEALTHCHECK' not in code:
-        findings.append({"severity": "low", "title": "No HEALTHCHECK Defined", "description": "Docker cannot determine if the application inside the container is healthy.", "recommendation": "Add HEALTHCHECK --interval=30s CMD curl -f http://localhost:PORT/health || exit 1"})
-    if 'multi-stage' not in code.lower() and code.count('FROM') < 2:
-        findings.append({"severity": "info", "title": "Consider Multi-Stage Build", "description": "Single-stage build detected. Build tools and dependencies remain in the final image.", "recommendation": "Use multi-stage builds: separate build stage from runtime stage to reduce final image size by 60-80%."})
-    return findings
+def scan_directory(directory_path):
+    """Walk a directory and scan all infrastructure files."""
+    all_findings = []
+    scannable_extensions = ('.tf', '.yaml', '.yml', '.dockerfile')
+    scannable_names = ('Dockerfile', 'Jenkinsfile', 'docker-compose.yml', 'docker-compose.yaml')
+
+    for root, dirs, files in os.walk(directory_path):
+        # Skip hidden directories and common non-infra dirs
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('node_modules', 'vendor', '__pycache__', '.git')]
+        for filename in files:
+            full_path = os.path.join(root, filename)
+            rel_path = os.path.relpath(full_path, directory_path)
+
+            should_scan = (
+                filename.lower().endswith(scannable_extensions) or
+                filename in scannable_names or
+                '.github/workflows' in rel_path.replace('\\', '/')
+            )
+
+            if should_scan:
+                try:
+                    with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                    file_type = detect_file_type(rel_path, content)
+                    if file_type:
+                        file_findings = analyze_content(content, file_type, rel_path)
+                        all_findings.extend(file_findings)
+                except Exception:
+                    continue
+
+    return all_findings
 
 
-def analyze_cicd(code):
-    findings = []
-    if 'secrets' not in code.lower() and ('password' in code.lower() or 'token' in code.lower() or 'key' in code.lower()):
-        findings.append({"severity": "critical", "title": "Hardcoded Secrets Detected", "description": "Potential secrets (passwords, tokens, keys) found in pipeline code. These will be exposed in logs and version control.", "recommendation": "Use GitHub Secrets, AWS Secrets Manager, or HashiCorp Vault. Reference via ${{ secrets.MY_SECRET }}"})
-    if 'cache' not in code.lower():
-        findings.append({"severity": "medium", "title": "No Caching Configured", "description": "Pipeline doesn't use dependency caching. Every run downloads all dependencies from scratch.", "recommendation": "Add cache step for node_modules, pip cache, or Docker layer caching to reduce build time by 40-60%."})
-    if 'timeout' not in code.lower():
-        findings.append({"severity": "low", "title": "No Timeout Set", "description": "No job timeout configured. Hung jobs will consume runner minutes indefinitely.", "recommendation": "Add timeout-minutes: 15 (or appropriate value) to prevent runaway jobs."})
-    if 'test' not in code.lower() and 'lint' not in code.lower():
-        findings.append({"severity": "high", "title": "No Testing Step", "description": "Pipeline has no test or lint step. Code ships to production without quality gates.", "recommendation": "Add lint and test steps before build/deploy. Fail the pipeline on test failures."})
-    if 'main' in code or 'master' in code:
-        if 'pull_request' not in code:
-            findings.append({"severity": "medium", "title": "No PR Trigger", "description": "Pipeline only triggers on push to main. PRs don't get validated before merge.", "recommendation": "Add pull_request trigger to validate changes before they reach the main branch."})
-    return findings
+def clone_and_scan_repo(repo_url, token=None):
+    """Clone a GitHub repo and scan it for infrastructure issues."""
+    clone_dir = os.path.join('/tmp', f'infraaudit-{uuid.uuid4().hex[:12]}')
+
+    try:
+        # Build clone URL with token if provided
+        if token:
+            # Extract owner/repo from URL
+            match = re.match(r'https?://github\.com/([^/]+/[^/]+?)(?:\.git)?$', repo_url)
+            if match:
+                repo_path = match.group(1)
+                clone_url = f'https://{token}@github.com/{repo_path}.git'
+            else:
+                clone_url = repo_url
+        else:
+            # No token — try public clone but warn if it fails
+            clone_url = repo_url
+
+        # Clone with depth 1 for speed
+        env = os.environ.copy()
+        env['GIT_TERMINAL_PROMPT'] = '0'
+        env['GIT_ASKPASS'] = '/bin/false'  # Always fail if asked for password
+        env['GIT_SSH_COMMAND'] = 'ssh -o BatchMode=yes'
+        env['GIT_CONFIG_NOSYSTEM'] = '1'
+        env['GIT_CONFIG_GLOBAL'] = '/dev/null'
+        env['HOME'] = clone_dir  # Isolate from user's ~/.gitconfig
+
+        # Use -c options to disable all credential helpers
+        git_cmd = [
+            'git',
+            '-c', 'credential.helper=',
+            '-c', 'credential.helper=/bin/false',
+            'clone', '--depth', '1', '--single-branch',
+            clone_url, clone_dir
+        ]
+
+        result = subprocess.run(
+            git_cmd, capture_output=True, text=True, timeout=15, env=env
+        )
+
+        if result.returncode != 0:
+            error_msg = result.stderr.lower()
+            if 'authentication' in error_msg or 'fatal: could not read' in error_msg or 'terminal prompts disabled' in error_msg:
+                return None, 'Authentication failed. This appears to be a private repository — please provide a GitHub Personal Access Token with repo scope.'
+            elif 'not found' in error_msg or 'does not exist' in error_msg:
+                return None, 'Repository not found. Check the URL and ensure the repo exists.'
+            else:
+                return None, f'Failed to clone repository: {result.stderr[:200]}'
+
+        # Scan the cloned directory
+        findings = scan_directory(clone_dir)
+
+        if not findings:
+            return [], None
+
+        # Deduplicate findings — group same issue across files, keep unique per file
+        seen = set()
+        unique_findings = []
+        for f in findings:
+            key = (f['severity'], f['title'], f.get('file_path', ''))
+            if key not in seen:
+                seen.add(key)
+                unique_findings.append(f)
+
+        return unique_findings, None
+
+    except subprocess.TimeoutExpired:
+        return None, 'Authentication failed or repository is too large. If this is a private repo, please provide a valid GitHub Personal Access Token.'
+    except Exception as e:
+        return None, f'Error scanning repository: {str(e)}'
+    finally:
+        # Clean up
+        if os.path.exists(clone_dir):
+            shutil.rmtree(clone_dir, ignore_errors=True)
 
 
-def analyze_logs(code):
-    findings = []
-    if 'OOMKilled' in code:
-        findings.append({"severity": "critical", "title": "OOMKilled Events Detected", "description": "Pods are being killed due to memory exhaustion. Application is exceeding memory limits.", "recommendation": "Increase memory limits, fix memory leaks, or optimize application memory usage. Check for unbounded caches or connection pools."})
-    if 'CrashLoopBackOff' in code:
-        findings.append({"severity": "critical", "title": "CrashLoopBackOff Detected", "description": "Pod is repeatedly crashing and restarting. The application fails to start or crashes immediately after starting.", "recommendation": "Check application logs with kubectl logs <pod>. Common causes: missing env vars, failed DB connections, port conflicts."})
-    if 'ImagePullBackOff' in code:
-        findings.append({"severity": "high", "title": "Image Pull Failure", "description": "Kubernetes cannot pull the container image. The image doesn't exist or credentials are wrong.", "recommendation": "Verify image name/tag exists in registry. Check imagePullSecrets if using private registry. Ensure ECR login is configured."})
-    if 'connection refused' in code.lower() or 'connection timed out' in code.lower():
-        findings.append({"severity": "high", "title": "Connection Failures", "description": "Services are failing to connect to dependencies. Network policies, DNS, or target services may be down.", "recommendation": "Check target service health, verify NetworkPolicies allow traffic, confirm DNS resolution with nslookup."})
-    if 'error' in code.lower() or 'exception' in code.lower():
-        error_count = code.lower().count('error') + code.lower().count('exception')
-        findings.append({"severity": "medium", "title": f"Multiple Errors Detected ({error_count})", "description": f"Found {error_count} error/exception occurrences in logs. Investigate root causes.", "recommendation": "Correlate timestamps with deployments. Check if errors started after a specific release. Set up alerting on error rate spikes."})
-    if not findings:
-        findings.append({"severity": "success", "title": "Logs Look Healthy", "description": "No critical patterns detected in the provided logs.", "recommendation": "Continue monitoring. Set up Prometheus alerts for error rate > 1% and latency p99 > 500ms."})
-    return findings
-
-# ─── ROUTES ───────────────────────────────────────────────────────────────────
+# ============================================================
+# ROUTES
+# ============================================================
 
 @app.route('/')
 def index():
     return render_template('index.html')
+
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        email = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '')
-        if not name or not email or not password:
-            flash('All fields are required.', 'error')
-            return redirect(url_for('register'))
-        if len(password) < 6:
-            flash('Password must be at least 6 characters.', 'error')
-            return redirect(url_for('register'))
-        if User.query.filter_by(email=email).first():
-            flash('Email already registered. Please login.', 'error')
-            return redirect(url_for('login'))
-        pw_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        user = User(name=name, email=email, password_hash=pw_hash)
-        db.session.add(user)
-        db.session.commit()
-        login_user(user)
-        return redirect(url_for('dashboard'))
+        try:
+            email = request.form.get('email', '').strip().lower()
+            name = request.form.get('name', '').strip()
+            password = request.form.get('password', '')
+            confirm = request.form.get('confirm_password', '')
+
+            if not email or not name or not password:
+                flash('All fields are required.', 'error')
+                return render_template('auth.html', mode='register')
+
+            if password != confirm:
+                flash('Passwords do not match.', 'error')
+                return render_template('auth.html', mode='register')
+
+            if len(password) < 8:
+                flash('Password must be at least 8 characters.', 'error')
+                return render_template('auth.html', mode='register')
+
+            if User.query.filter_by(email=email).first():
+                flash('Email already registered.', 'error')
+                return render_template('auth.html', mode='register')
+
+            user = User(email=email, name=name)
+            user.set_password(password)
+            db.session.add(user)
+            db.session.commit()
+
+            login_user(user)
+            flash('Welcome to InfraAudit AI!', 'success')
+            return redirect(url_for('dashboard'))
+        except Exception as e:
+            db.session.rollback()
+            flash('Registration failed. Please try again.', 'error')
+            return render_template('auth.html', mode='register')
+
     return render_template('auth.html', mode='register')
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '')
-        user = User.query.filter_by(email=email).first()
-        if user and bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
-            login_user(user)
-            return redirect(url_for('dashboard'))
-        flash('Invalid email or password.', 'error')
-        return redirect(url_for('login'))
+        try:
+            email = request.form.get('email', '').strip().lower()
+            password = request.form.get('password', '')
+
+            user = User.query.filter_by(email=email).first()
+            if user and user.check_password(password):
+                login_user(user)
+                next_page = request.args.get('next')
+                flash('Welcome back!', 'success')
+                return redirect(next_page or url_for('dashboard'))
+            else:
+                flash('Invalid email or password.', 'error')
+        except Exception:
+            flash('Login failed. Please try again.', 'error')
+
     return render_template('auth.html', mode='login')
+
 
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
+    flash('You have been logged out.', 'info')
     return redirect(url_for('index'))
+
 
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    analyses = Analysis.query.filter_by(user_id=current_user.id).order_by(Analysis.created_at.desc()).limit(20).all()
-    return render_template('dashboard.html', analyses=analyses)
+    projects = Project.query.filter_by(user_id=current_user.id).order_by(Project.created_at.desc()).all()
+    scans = Scan.query.join(Project).filter(Project.user_id == current_user.id).order_by(Scan.created_at.desc()).limit(10).all()
 
-@app.route('/analyze', methods=['POST'])
+    total_projects = len(projects)
+    total_scans = Scan.query.join(Project).filter(Project.user_id == current_user.id).count()
+    avg_risk = 0
+    if projects:
+        scores = [p.risk_score for p in projects if p.risk_score is not None]
+        avg_risk = round(sum(scores) / len(scores)) if scores else 100
+
+    total_critical = sum(s.critical_count for s in scans)
+
+    # Risk trend data (last 10 scans)
+    recent_scans = Scan.query.join(Project).filter(
+        Project.user_id == current_user.id
+    ).order_by(Scan.created_at.asc()).limit(10).all()
+    trend_labels = [s.created_at.strftime('%m/%d') for s in recent_scans]
+    trend_data = [s.risk_score for s in recent_scans]
+
+    return render_template('dashboard.html',
+                           projects=projects,
+                           scans=scans,
+                           total_projects=total_projects,
+                           total_scans=total_scans,
+                           avg_risk=avg_risk,
+                           total_critical=total_critical,
+                           trend_labels=json.dumps(trend_labels),
+                           trend_data=json.dumps(trend_data))
+
+
+@app.route('/projects')
+@login_required
+def projects():
+    user_projects = Project.query.filter_by(user_id=current_user.id).order_by(Project.created_at.desc()).all()
+    return render_template('projects.html', projects=user_projects)
+
+
+@app.route('/projects/new', methods=['GET', 'POST'])
+@login_required
+def project_new():
+    if request.method == 'POST':
+        try:
+            name = request.form.get('name', '').strip()
+            repo_url = request.form.get('repo_url', '').strip()
+            github_token = request.form.get('github_token', '').strip()
+
+            if not name:
+                flash('Project name is required.', 'error')
+                return render_template('project_new.html')
+
+            project = Project(
+                user_id=current_user.id,
+                name=name,
+                repo_url=repo_url if repo_url else None
+            )
+            db.session.add(project)
+
+            # Store token on user if provided
+            if github_token:
+                current_user.github_token = github_token
+
+            db.session.commit()
+            flash('Project created successfully!', 'success')
+
+            # Auto-scan if repo URL provided
+            if repo_url:
+                return redirect(url_for('project_scan', project_id=project.id))
+
+            return redirect(url_for('project_detail', project_id=project.id))
+        except Exception as e:
+            db.session.rollback()
+            flash('Failed to create project.', 'error')
+
+    return render_template('project_new.html')
+
+
+@app.route('/projects/<int:project_id>')
+@login_required
+def project_detail(project_id):
+    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+    scans = Scan.query.filter_by(project_id=project.id).order_by(Scan.created_at.desc()).all()
+    latest_findings = []
+    if scans:
+        latest_findings = Finding.query.filter_by(scan_id=scans[0].id).all()
+    has_token = bool(current_user.github_token)
+    return render_template('project_detail.html', project=project, scans=scans, findings=latest_findings, has_token=has_token)
+
+
+@app.route('/projects/<int:project_id>/token', methods=['POST'])
+@login_required
+def project_update_token(project_id):
+    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+    token = request.form.get('github_token', '').strip()
+    if not token:
+        flash('Please provide a valid GitHub Personal Access Token.', 'error')
+    elif not token.startswith(('ghp_', 'github_pat_')):
+        flash('Invalid token format. GitHub PATs start with ghp_ or github_pat_.', 'error')
+    else:
+        current_user.github_token = token
+        db.session.commit()
+        flash('GitHub token updated successfully! You can now scan private repositories.', 'success')
+    return redirect(url_for('project_detail', project_id=project.id))
+
+
+@app.route('/projects/<int:project_id>/delete', methods=['POST'])
+@login_required
+def project_delete(project_id):
+    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+    project_name = project.name
+    db.session.delete(project)
+    db.session.commit()
+    flash(f'Project "{project_name}" deleted successfully.', 'success')
+    return redirect(url_for('projects'))
+
+
+@app.route('/projects/<int:project_id>/scan')
+@login_required
+def project_scan(project_id):
+    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+
+    if not project.repo_url:
+        flash('No repository URL configured for this project.', 'error')
+        return redirect(url_for('project_detail', project_id=project.id))
+
+    try:
+        token = current_user.github_token
+        findings_list, error = clone_and_scan_repo(project.repo_url, token)
+
+        if error:
+            flash(f'Scan failed: {error}', 'error')
+            return redirect(url_for('project_detail', project_id=project.id))
+
+        # Calculate scores
+        risk_score = calculate_risk_score(findings_list)
+        severity_counts = count_by_severity(findings_list)
+
+        # Create scan record
+        scan = Scan(
+            project_id=project.id,
+            status='completed',
+            risk_score=risk_score,
+            findings_count=len(findings_list),
+            critical_count=severity_counts['critical'],
+            high_count=severity_counts['high'],
+            medium_count=severity_counts['medium'],
+            low_count=severity_counts['low'],
+            info_count=severity_counts['info']
+        )
+        db.session.add(scan)
+        db.session.flush()
+
+        # Create finding records
+        for f in findings_list:
+            finding = Finding(
+                scan_id=scan.id,
+                severity=f['severity'],
+                category=f['category'],
+                title=f['title'],
+                description=f['description'],
+                recommendation=f['recommendation'],
+                file_path=f.get('file_path'),
+                line_number=f.get('line_number'),
+                framework=f.get('framework')
+            )
+            db.session.add(finding)
+
+        # Update project
+        project.last_scan_at = datetime.now(timezone.utc)
+        project.risk_score = risk_score
+        db.session.commit()
+
+        flash(f'Scan completed! Risk score: {risk_score}/100 with {len(findings_list)} findings.', 'success')
+        return redirect(url_for('scan_detail', scan_id=scan.id))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Scan failed: {str(e)}', 'error')
+        return redirect(url_for('project_detail', project_id=project.id))
+
+
+@app.route('/scan/<int:scan_id>')
+@login_required
+def scan_detail(scan_id):
+    scan = Scan.query.join(Project).filter(
+        Scan.id == scan_id,
+        Project.user_id == current_user.id
+    ).first_or_404()
+    findings = Finding.query.filter_by(scan_id=scan.id).order_by(
+        Finding.file_path.asc(),
+        db.case(
+            (Finding.severity == 'critical', 0),
+            (Finding.severity == 'high', 1),
+            (Finding.severity == 'medium', 2),
+            (Finding.severity == 'low', 3),
+            else_=4
+        )
+    ).all()
+
+    # Framework coverage
+    frameworks = {}
+    for f in findings:
+        if f.framework:
+            if f.framework not in frameworks:
+                frameworks[f.framework] = 0
+            frameworks[f.framework] += 1
+
+    return render_template('scan_detail.html', scan=scan, findings=findings, frameworks=frameworks)
+
+
+@app.route('/scan/<int:scan_id>/export')
+@login_required
+def scan_export(scan_id):
+    scan = Scan.query.join(Project).filter(
+        Scan.id == scan_id,
+        Project.user_id == current_user.id
+    ).first_or_404()
+    findings = Finding.query.filter_by(scan_id=scan.id).all()
+
+    export_data = {
+        'scan_id': scan.id,
+        'project': scan.project.name,
+        'repo_url': scan.project.repo_url,
+        'status': scan.status,
+        'risk_score': scan.risk_score,
+        'scanned_at': scan.created_at.isoformat(),
+        'summary': {
+            'total_findings': scan.findings_count,
+            'critical': scan.critical_count,
+            'high': scan.high_count,
+            'medium': scan.medium_count,
+            'low': scan.low_count,
+            'info': scan.info_count
+        },
+        'findings': [{
+            'severity': f.severity,
+            'category': f.category,
+            'title': f.title,
+            'description': f.description,
+            'recommendation': f.recommendation,
+            'file_path': f.file_path,
+            'line_number': f.line_number,
+            'framework': f.framework
+        } for f in findings]
+    }
+
+    return jsonify(export_data)
+
+
+@app.route('/analyze', methods=['GET', 'POST'])
 @login_required
 def analyze():
-    code = request.form.get('code', '').strip()
-    file_type = request.form.get('file_type', 'kubernetes')
-    if not code:
-        return jsonify({'error': 'No code provided'}), 400
-    if len(code) > 50000:
-        return jsonify({'error': 'Input too large. Max 50KB.'}), 400
-    findings = analyze_code(code, file_type)
-    result_json = json.dumps(findings)
-    analysis = Analysis(user_id=current_user.id, file_type=file_type, input_code=code[:5000], result=result_json)
-    db.session.add(analysis)
-    db.session.commit()
-    return jsonify({'findings': findings, 'id': analysis.id})
+    results = None
+    if request.method == 'POST':
+        try:
+            code = request.form.get('code', '')
+            file_type = request.form.get('file_type', 'kubernetes')
 
-@app.route('/analysis/<int:analysis_id>')
-@login_required
-def view_analysis(analysis_id):
-    analysis = Analysis.query.filter_by(id=analysis_id, user_id=current_user.id).first_or_404()
-    return jsonify({'findings': json.loads(analysis.result), 'file_type': analysis.file_type, 'created_at': analysis.created_at.isoformat()})
+            if not code.strip():
+                flash('Please paste some code to analyze.', 'error')
+                return render_template('analyze.html', results=None)
+
+            findings_list = analyze_content(code, file_type, f'manual_input.{file_type}')
+            risk_score = calculate_risk_score(findings_list)
+            severity_counts = count_by_severity(findings_list)
+
+            # Save as a scan under a "Manual Scans" project
+            manual_project = Project.query.filter_by(
+                user_id=current_user.id, name='Manual Scans'
+            ).first()
+            if not manual_project:
+                manual_project = Project(
+                    user_id=current_user.id,
+                    name='Manual Scans',
+                    repo_url=None
+                )
+                db.session.add(manual_project)
+                db.session.flush()
+
+            scan = Scan(
+                project_id=manual_project.id,
+                status='completed',
+                risk_score=risk_score,
+                findings_count=len(findings_list),
+                critical_count=severity_counts['critical'],
+                high_count=severity_counts['high'],
+                medium_count=severity_counts['medium'],
+                low_count=severity_counts['low'],
+                info_count=severity_counts['info']
+            )
+            db.session.add(scan)
+            db.session.flush()
+
+            for f in findings_list:
+                finding = Finding(
+                    scan_id=scan.id,
+                    severity=f['severity'],
+                    category=f['category'],
+                    title=f['title'],
+                    description=f['description'],
+                    recommendation=f['recommendation'],
+                    file_path=f.get('file_path'),
+                    line_number=f.get('line_number'),
+                    framework=f.get('framework')
+                )
+                db.session.add(finding)
+
+            manual_project.last_scan_at = datetime.now(timezone.utc)
+            manual_project.risk_score = risk_score
+            db.session.commit()
+
+            results = {
+                'risk_score': risk_score,
+                'findings': findings_list,
+                'counts': severity_counts,
+                'scan_id': scan.id
+            }
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Analysis failed: {str(e)}', 'error')
+
+    return render_template('analyze.html', results=results)
+
 
 @app.route('/pricing')
 def pricing():
     return render_template('pricing.html')
 
+
 @app.route('/about')
 def about():
     return render_template('about.html')
 
-# ─── INIT DB ──────────────────────────────────────────────────────────────────
+
+# ============================================================
+# APP INITIALIZATION
+# ============================================================
 
 with app.app_context():
     db.create_all()
 
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=os.getenv('FLASK_ENV') != 'production')
+    app.run(debug=True, host='0.0.0.0', port=5000)

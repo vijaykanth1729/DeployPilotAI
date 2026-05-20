@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Manual Scan{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-white">Manual Code Scan</h1>
+        <p class="text-gray-400 mt-1">Paste infrastructure code to analyze for security issues</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Input Panel -->
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <form method="POST" action="{{ url_for('analyze') }}">
+                <div class="mb-4">
+                    <label for="file_type" class="block text-sm font-medium text-gray-300 mb-1.5">File Type</label>
+                    <select id="file_type" name="file_type"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition">
+                        <option value="kubernetes">Kubernetes YAML</option>
+                        <option value="terraform">Terraform (.tf)</option>
+                        <option value="dockerfile">Dockerfile</option>
+                        <option value="cicd">CI/CD Pipeline (GitHub Actions, Jenkins)</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label for="code" class="block text-sm font-medium text-gray-300 mb-1.5">Infrastructure Code</label>
+                    <textarea id="code" name="code" rows="18" required
+                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition font-mono text-sm"
+                        placeholder="Paste your Kubernetes YAML, Terraform, Dockerfile, or CI/CD config here...">{{ request.form.get('code', '') }}</textarea>
+                </div>
+                <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-gray-900 py-3 rounded-lg font-semibold transition glow-cyan">
+                    <i class="bi bi-search mr-2"></i> Analyze Code
+                </button>
+            </form>
+        </div>
+
+        <!-- Results Panel -->
+        <div>
+            {% if results %}
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                <!-- Risk Score -->
+                <div class="text-center mb-6 pb-6 border-b border-gray-800">
+                    <div class="text-5xl font-bold
+                        {% if results.risk_score >= 80 %}text-green-400
+                        {% elif results.risk_score >= 60 %}text-yellow-400
+                        {% elif results.risk_score >= 40 %}text-orange-400
+                        {% else %}text-red-400{% endif %}">{{ results.risk_score }}</div>
+                    <div class="text-sm text-gray-400 mt-1">Risk Score</div>
+                </div>
+
+                <!-- Severity Counts -->
+                <div class="grid grid-cols-5 gap-2 mb-6">
+                    <div class="text-center">
+                        <div class="text-lg font-bold text-red-400">{{ results.counts.critical }}</div>
+                        <div class="text-xs text-gray-500">Crit</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-bold text-orange-400">{{ results.counts.high }}</div>
+                        <div class="text-xs text-gray-500">High</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-bold text-yellow-400">{{ results.counts.medium }}</div>
+                        <div class="text-xs text-gray-500">Med</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-bold text-blue-400">{{ results.counts.low }}</div>
+                        <div class="text-xs text-gray-500">Low</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-lg font-bold text-gray-400">{{ results.counts.info }}</div>
+                        <div class="text-xs text-gray-500">Info</div>
+                    </div>
+                </div>
+
+                <!-- Findings -->
+                {% if results.findings %}
+                <div class="space-y-3 max-h-96 overflow-y-auto">
+                    {% for finding in results.findings %}
+                    <div class="p-3 bg-gray-800/50 border border-gray-700/50 rounded-lg">
+                        <div class="flex items-center space-x-2 mb-1">
+                            <span class="px-1.5 py-0.5 rounded text-xs font-medium
+                                {% if finding.severity == 'critical' %}bg-red-500/20 text-red-400
+                                {% elif finding.severity == 'high' %}bg-orange-500/20 text-orange-400
+                                {% elif finding.severity == 'medium' %}bg-yellow-500/20 text-yellow-400
+                                {% elif finding.severity == 'low' %}bg-blue-500/20 text-blue-400
+                                {% else %}bg-gray-500/20 text-gray-400{% endif %}">{{ finding.severity|upper }}</span>
+                            <span class="text-sm font-medium text-white">{{ finding.title }}</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">{{ finding.description }}</p>
+                        <p class="text-xs text-green-400 mt-1"><i class="bi bi-lightbulb mr-1"></i>{{ finding.recommendation }}</p>
+                        {% if finding.line_number %}
+                        <p class="text-xs text-gray-500 mt-1">Line {{ finding.line_number }}</p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="mt-4 pt-4 border-t border-gray-800">
+                    <a href="{{ url_for('scan_detail', scan_id=results.scan_id) }}" class="text-cyan-400 hover:text-cyan-300 text-sm">
+                        View full report <i class="bi bi-arrow-right ml-1"></i>
+                    </a>
+                </div>
+                {% else %}
+                <div class="text-center py-6">
+                    <i class="bi bi-check-circle text-green-400 text-3xl mb-2"></i>
+                    <p class="text-green-400 font-medium">No issues found!</p>
+                    <p class="text-gray-400 text-sm mt-1">Your code looks secure.</p>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                <div class="text-center py-12 text-gray-500">
+                    <i class="bi bi-code-slash text-4xl mb-3"></i>
+                    <p class="text-lg">Paste code and click Analyze</p>
+                    <p class="text-sm mt-2">Results will appear here</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

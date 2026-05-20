@@ -1,48 +1,86 @@
 {% extends "base.html" %}
 {% block title %}About{% endblock %}
 {% block content %}
-<section class="py-20 px-4">
-  <div class="max-w-3xl mx-auto">
-    <div class="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-3">About DeployPilot AI</div>
-    <h1 class="text-3xl md:text-4xl font-black mb-6">Built by practitioners,<br>for practitioners.</h1>
-    <div class="prose prose-invert max-w-none text-gray-300 leading-relaxed space-y-4">
-      <p>DeployPilot AI is an AI-powered DevOps assistant that helps engineers ship faster and safer. We analyze Kubernetes manifests, Terraform code, Dockerfiles, CI/CD pipelines, and production logs — detecting issues, security risks, and optimization opportunities in seconds.</p>
-      <p><strong>Founded in 2026</strong>, DeployPilot AI was born from a simple frustration: every DevOps team reviews the same misconfigurations over and over — missing resource limits, hardcoded secrets, unpinned providers, root containers. We built an AI engine that catches these issues instantly, so engineers can focus on shipping features instead of debugging configs.</p>
-      <p>Our founding team brings deep hands-on experience building and operating production infrastructure on AWS — from EKS clusters and Terraform modules to CI/CD pipelines and observability stacks. We've seen what breaks in production, and we built DeployPilot to prevent it.</p>
-
-      <h3 class="text-xl font-bold text-white mt-8 mb-4">Our Mission</h3>
-      <p>Make production-grade DevOps practices accessible to every engineering team — from solo developers to enterprise platform teams. No more shipping misconfigurations to production.</p>
-
-      <h3 class="text-xl font-bold text-white mt-8 mb-4">Our Stack</h3>
-      <p>DeployPilot AI is built entirely on AWS:</p>
-      <ul class="list-disc list-inside space-y-1 text-gray-400">
-        <li>AWS EC2 / ECS for application hosting</li>
-        <li>AWS RDS (PostgreSQL) for user and analysis data</li>
-        <li>AWS S3 for file storage and static assets</li>
-        <li>AWS CloudFront for global content delivery</li>
-        <li>AWS Bedrock (planned) for AI model inference at scale</li>
-        <li>AWS SES for transactional emails</li>
-        <li>AWS CloudWatch for monitoring and alerting</li>
-        <li>Docker + Gunicorn for containerized deployment</li>
-      </ul>
-
-      <h3 class="text-xl font-bold text-white mt-8 mb-4">Team</h3>
-      <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-6 not-prose">
-        <div class="flex items-center gap-4 mb-3">
-          <div class="w-14 h-14 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">VA</div>
-          <div>
-            <div class="text-white font-bold text-lg">Vijaykanth Anugu</div>
-            <div class="text-cyan-400 text-sm font-semibold">Founder & CTO</div>
-          </div>
-        </div>
-        <p class="text-gray-400 text-sm leading-relaxed">DevOps engineer and AWS specialist based in Hyderabad, India. Previously built and operated production Kubernetes platforms, CI/CD systems, and cloud infrastructure for enterprise clients. Now focused full-time on making DevOps best practices automated and accessible through AI.</p>
-      </div>
-
-      <h3 class="text-xl font-bold text-white mt-8 mb-4">Contact</h3>
-      <p>Email: <a href="mailto:deploypilotai@gmail.com" class="text-cyan-400">deploypilotai@gmail.com</a></p>
-      <p>Location: Hyderabad, India</p>
-      <p class="text-sm text-gray-500 mt-4">DeployPilot AI · Founded 2026 · Hyderabad, India</p>
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <div class="text-center mb-16">
+        <h1 class="text-4xl font-bold text-white mb-4">About InfraAudit AI</h1>
+        <p class="text-xl text-gray-400">Making infrastructure security accessible to every developer</p>
     </div>
-  </div>
-</section>
+
+    <!-- Mission -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 mb-8">
+        <h2 class="text-2xl font-bold text-white mb-4">Our Mission</h2>
+        <p class="text-gray-300 leading-relaxed">
+            Infrastructure misconfigurations are the #1 cause of cloud security breaches. Yet most teams
+            don't have dedicated security engineers reviewing every Terraform file, Kubernetes manifest,
+            or CI/CD pipeline. InfraAudit AI bridges that gap — providing instant, actionable security
+            feedback that helps developers ship secure infrastructure from day one.
+        </p>
+    </div>
+
+    <!-- Story -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 mb-8">
+        <h2 class="text-2xl font-bold text-white mb-4">Our Story</h2>
+        <p class="text-gray-300 leading-relaxed mb-4">
+            Founded in 2026, DeployPilot AI started with a simple observation: developers are writing
+            more infrastructure code than ever, but security tooling hasn't kept up. Traditional
+            scanners are slow, noisy, and disconnected from the developer workflow.
+        </p>
+        <p class="text-gray-300 leading-relaxed">
+            We built InfraAudit AI to be different — fast, developer-friendly, and focused on
+            actionable findings rather than overwhelming alerts. Every finding comes with a clear
+            explanation and a specific fix, mapped to industry compliance frameworks.
+        </p>
+    </div>
+
+    <!-- Team -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 mb-8">
+        <h2 class="text-2xl font-bold text-white mb-4">Team</h2>
+        <div class="flex items-center space-x-4">
+            <div class="w-16 h-16 bg-cyan-500/10 border border-cyan-500/30 rounded-full flex items-center justify-center">
+                <i class="bi bi-person text-cyan-400 text-2xl"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-white">Vijaykanth Anugu</h3>
+                <p class="text-cyan-400 text-sm">Founder & CTO</p>
+                <p class="text-gray-400 text-sm mt-1">Cloud infrastructure and DevSecOps specialist</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tech Stack -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 mb-8">
+        <h2 class="text-2xl font-bold text-white mb-4">Built On</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="text-center p-4 bg-gray-800/50 rounded-lg">
+                <i class="bi bi-cloud text-orange-400 text-2xl mb-2"></i>
+                <p class="text-sm text-gray-300">AWS</p>
+            </div>
+            <div class="text-center p-4 bg-gray-800/50 rounded-lg">
+                <i class="bi bi-filetype-py text-blue-400 text-2xl mb-2"></i>
+                <p class="text-sm text-gray-300">Python / Flask</p>
+            </div>
+            <div class="text-center p-4 bg-gray-800/50 rounded-lg">
+                <i class="bi bi-box text-cyan-400 text-2xl mb-2"></i>
+                <p class="text-sm text-gray-300">Docker</p>
+            </div>
+            <div class="text-center p-4 bg-gray-800/50 rounded-lg">
+                <i class="bi bi-database text-green-400 text-2xl mb-2"></i>
+                <p class="text-sm text-gray-300">PostgreSQL</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contact -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8">
+        <h2 class="text-2xl font-bold text-white mb-4">Get in Touch</h2>
+        <p class="text-gray-300 mb-4">
+            Have questions, feedback, or want to discuss enterprise needs? We'd love to hear from you.
+        </p>
+        <div class="flex items-center space-x-3">
+            <i class="bi bi-envelope text-cyan-400"></i>
+            <a href="mailto:deploypilotai@gmail.com" class="text-cyan-400 hover:text-cyan-300 transition">deploypilotai@gmail.com</a>
+        </div>
+    </div>
+</div>
 {% endblock %}

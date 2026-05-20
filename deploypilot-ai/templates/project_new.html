@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}New Project{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-8">
+        <a href="{{ url_for('projects') }}" class="text-gray-400 hover:text-white text-sm transition">
+            <i class="bi bi-arrow-left mr-1"></i> Back to Projects
+        </a>
+        <h1 class="text-3xl font-bold text-white mt-4">Add New Project</h1>
+        <p class="text-gray-400 mt-1">Connect a GitHub repository to scan for infrastructure issues</p>
+    </div>
+
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8">
+        <form method="POST" action="{{ url_for('project_new') }}" class="space-y-6">
+            <div>
+                <label for="name" class="block text-sm font-medium text-gray-300 mb-1.5">Project Name *</label>
+                <input type="text" id="name" name="name" required
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
+                    placeholder="My Infrastructure Project">
+            </div>
+
+            <div>
+                <label for="repo_url" class="block text-sm font-medium text-gray-300 mb-1.5">GitHub Repository URL</label>
+                <input type="url" id="repo_url" name="repo_url"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
+                    placeholder="https://github.com/owner/repo">
+                <p class="text-xs text-gray-500 mt-1.5">Leave empty for manual-paste-only projects</p>
+            </div>
+
+            <div>
+                <label for="github_token" class="block text-sm font-medium text-gray-300 mb-1.5">GitHub Personal Access Token</label>
+                <input type="password" id="github_token" name="github_token"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+                <p class="text-xs text-gray-500 mt-1.5">Required for private repos. Token needs <code class="text-cyan-400">repo</code> scope.</p>
+            </div>
+
+            <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                <div class="flex items-start space-x-3">
+                    <i class="bi bi-info-circle text-cyan-400 mt-0.5"></i>
+                    <div class="text-sm text-gray-400">
+                        <p class="font-medium text-gray-300 mb-1">What gets scanned?</p>
+                        <p>We scan: <code>.tf</code>, <code>.yaml</code>, <code>.yml</code>, <code>Dockerfile</code>, <code>Jenkinsfile</code>, and <code>.github/workflows/*</code> files.</p>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-gray-900 py-3 rounded-lg font-semibold transition glow-cyan">
+                <i class="bi bi-plug mr-2"></i> Connect & Scan
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

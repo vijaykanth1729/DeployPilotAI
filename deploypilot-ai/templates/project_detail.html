@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }}{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Breadcrumb -->
+    <div class="mb-6">
+        <a href="{{ url_for('projects') }}" class="text-gray-400 hover:text-white text-sm transition">
+            <i class="bi bi-arrow-left mr-1"></i> Back to Projects
+        </a>
+    </div>
+
+    <!-- Project Header -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="w-14 h-14 bg-cyan-500/10 border border-cyan-500/30 rounded-xl flex items-center justify-center">
+                    <i class="bi bi-folder text-cyan-400 text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-white">{{ project.name }}</h1>
+                    {% if project.repo_url %}
+                    <p class="text-sm text-gray-400 mt-0.5">{{ project.repo_url }}</p>
+                    {% else %}
+                    <p class="text-sm text-gray-500 mt-0.5">Manual scans only</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="flex items-center space-x-4 mt-4 md:mt-0">
+                <!-- Risk Score -->
+                <div class="text-center">
+                    <div class="text-4xl font-bold
+                        {% if project.risk_score >= 80 %}text-green-400
+                        {% elif project.risk_score >= 60 %}text-yellow-400
+                        {% elif project.risk_score >= 40 %}text-orange-400
+                        {% else %}text-red-400{% endif %}">{{ project.risk_score }}</div>
+                    <div class="text-xs text-gray-400 mt-1">Risk Score</div>
+                </div>
+                {% if project.repo_url %}
+                <a href="{{ url_for('project_scan', project_id=project.id) }}" class="bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-4 py-2.5 rounded-lg font-medium transition glow-cyan">
+                    <i class="bi bi-play-fill mr-1"></i> Run Scan
+                </a>
+                {% endif %}
+                <form action="{{ url_for('project_delete', project_id=project.id) }}" method="POST" class="inline"
+                    onsubmit="return confirm('Are you sure you want to delete this project and all its scan history?')">
+                    <button type="submit" class="border border-red-500/30 hover:bg-red-500/10 text-red-400 px-3 py-2.5 rounded-lg text-sm transition">
+                        <i class="bi bi-trash3"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- GitHub Token Section -->
+        {% if project.repo_url %}
+        <div class="lg:col-span-3 mb-0">
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0
+                            {% if has_token %}bg-green-500/10 border border-green-500/30{% else %}bg-yellow-500/10 border border-yellow-500/30{% endif %}">
+                            <i class="bi {% if has_token %}bi-key-fill text-green-400{% else %}bi-exclamation-triangle-fill text-yellow-400{% endif %}"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium text-white">
+                                {% if has_token %}GitHub Token Connected{% else %}GitHub Token Required for Private Repos{% endif %}
+                            </p>
+                            <p class="text-xs text-gray-400">
+                                {% if has_token %}Token is stored. You can update it below if needed.{% else %}Add a Personal Access Token (PAT) with <code class="text-cyan-400">repo</code> scope to scan private repositories.{% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <form action="{{ url_for('project_update_token', project_id=project.id) }}" method="POST" class="flex items-center gap-2 w-full sm:w-auto">
+                        <input type="password" name="github_token" placeholder="ghp_xxxxxxxxxxxx" required
+                            class="flex-1 sm:w-64 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder-gray-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none" />
+                        <button type="submit" class="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-gray-900 font-medium text-sm transition flex-shrink-0">
+                            {% if has_token %}Update{% else %}Save Token{% endif %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Scan History -->
+        <div class="lg:col-span-2">
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">Scan History</h3>
+                {% if scans %}
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-gray-400 border-b border-gray-800">
+                                <th class="text-left py-3 px-2">Date</th>
+                                <th class="text-left py-3 px-2">Score</th>
+                                <th class="text-left py-3 px-2">Findings</th>
+                                <th class="text-left py-3 px-2">Critical</th>
+                                <th class="text-left py-3 px-2">High</th>
+                                <th class="text-left py-3 px-2">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for scan in scans %}
+                            <tr class="border-b border-gray-800/50 hover:bg-gray-800/30">
+                                <td class="py-3 px-2 text-gray-300">{{ scan.created_at.strftime('%b %d, %Y %H:%M') }}</td>
+                                <td class="py-3 px-2">
+                                    <span class="font-semibold
+                                        {% if scan.risk_score >= 80 %}text-green-400
+                                        {% elif scan.risk_score >= 60 %}text-yellow-400
+                                        {% elif scan.risk_score >= 40 %}text-orange-400
+                                        {% else %}text-red-400{% endif %}">{{ scan.risk_score }}</span>
+                                </td>
+                                <td class="py-3 px-2 text-gray-300">{{ scan.findings_count }}</td>
+                                <td class="py-3 px-2">
+                                    {% if scan.critical_count > 0 %}
+                                    <span class="bg-red-500/20 text-red-400 px-2 py-0.5 rounded text-xs">{{ scan.critical_count }}</span>
+                                    {% else %}<span class="text-gray-500">0</span>{% endif %}
+                                </td>
+                                <td class="py-3 px-2">
+                                    {% if scan.high_count > 0 %}
+                                    <span class="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded text-xs">{{ scan.high_count }}</span>
+                                    {% else %}<span class="text-gray-500">0</span>{% endif %}
+                                </td>
+                                <td class="py-3 px-2">
+                                    <a href="{{ url_for('scan_detail', scan_id=scan.id) }}" class="text-cyan-400 hover:text-cyan-300 text-xs">Details</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-8 text-gray-500">
+                    <i class="bi bi-clock-history text-3xl mb-2"></i>
+                    <p>No scans yet. Click "Run Scan" to start.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Latest Findings Summary -->
+        <div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">Latest Findings</h3>
+                {% if findings %}
+                <div class="space-y-3">
+                    {% for finding in findings[:8] %}
+                    <div class="flex items-start space-x-3 p-3 bg-gray-800/30 rounded-lg">
+                        <span class="mt-0.5 w-2 h-2 rounded-full flex-shrink-0
+                            {% if finding.severity == 'critical' %}bg-red-500
+                            {% elif finding.severity == 'high' %}bg-orange-500
+                            {% elif finding.severity == 'medium' %}bg-yellow-500
+                            {% elif finding.severity == 'low' %}bg-blue-500
+                            {% else %}bg-gray-500{% endif %}"></span>
+                        <div class="min-w-0">
+                            <p class="text-sm text-white truncate">{{ finding.title }}</p>
+                            <p class="text-xs text-gray-400 mt-0.5">{{ finding.file_path or 'N/A' }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% if findings|length > 8 %}
+                    <p class="text-xs text-gray-500 text-center pt-2">+ {{ findings|length - 8 }} more findings</p>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="text-center py-6 text-gray-500">
+                    <i class="bi bi-check-circle text-2xl mb-2"></i>
+                    <p class="text-sm">No findings yet</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
