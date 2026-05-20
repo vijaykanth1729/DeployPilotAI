@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'register' %}Sign Up{% else %}Login{% endif %}{% endblock %}
+{% block content %}
+<section class="py-20 px-4 flex items-center justify-center min-h-[70vh]">
+  <div class="w-full max-w-md">
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-8">
+      <div class="text-center mb-8">
+        <h1 class="text-2xl font-black mb-2">{% if mode == 'register' %}Create your account{% else %}Welcome back{% endif %}</h1>
+        <p class="text-sm text-gray-400">{% if mode == 'register' %}Start analyzing DevOps configs for free{% else %}Sign in to your DeployPilot account{% endif %}</p>
+      </div>
+      <form method="POST" class="space-y-4">
+        {% if mode == 'register' %}
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">Full Name</label>
+          <input type="text" name="name" required placeholder="Vijay Kumar" class="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition" />
+        </div>
+        {% endif %}
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">Email</label>
+          <input type="email" name="email" required placeholder="you@company.com" class="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">Password</label>
+          <input type="password" name="password" required minlength="6" placeholder="••••••••" class="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition" />
+        </div>
+        <button type="submit" class="w-full py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold glow-cyan hover:-translate-y-0.5 transition mt-2">
+          {% if mode == 'register' %}Create Account{% else %}Sign In{% endif %}
+        </button>
+      </form>
+      <div class="text-center mt-6 text-sm text-gray-400">
+        {% if mode == 'register' %}
+          Already have an account? <a href="/login" class="text-cyan-400 hover:underline">Sign in</a>
+        {% else %}
+          Don't have an account? <a href="/register" class="text-cyan-400 hover:underline">Sign up free</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

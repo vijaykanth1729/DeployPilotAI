@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<section class="py-10 px-4">
+  <div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <div>
+        <h1 class="text-2xl font-black">Welcome, {{ current_user.name }}</h1>
+        <p class="text-sm text-gray-400 mt-1">Analyze your DevOps configurations for issues and optimizations.</p>
+      </div>
+      <div class="text-sm text-gray-500">{{ analyses|length }} analyses run</div>
+    </div>
+
+    <div class="grid lg:grid-cols-5 gap-6">
+      <!-- Analysis Panel -->
+      <div class="lg:col-span-3">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+          <h2 class="font-bold text-lg mb-4"><i class="bi bi-cpu text-cyan-400 mr-2"></i>New Analysis</h2>
+          <form id="analysisForm">
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-300 mb-2">File Type</label>
+              <select id="fileType" class="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:border-cyan-500 outline-none">
+                <option value="kubernetes">Kubernetes YAML</option>
+                <option value="terraform">Terraform (.tf)</option>
+                <option value="dockerfile">Dockerfile</option>
+                <option value="cicd">CI/CD Pipeline (GitHub Actions / Jenkins)</option>
+                <option value="logs">Kubernetes Logs</option>
+              </select>
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-300 mb-2">Paste your code or config</label>
+              <textarea id="codeInput" rows="12" placeholder="Paste your Kubernetes YAML, Terraform code, Dockerfile, CI/CD pipeline, or logs here..." class="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white font-mono text-sm placeholder-gray-500 focus:border-cyan-500 outline-none resize-y"></textarea>
+            </div>
+            <button type="submit" id="analyzeBtn" class="w-full py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold glow-cyan hover:-translate-y-0.5 transition flex items-center justify-center gap-2">
+              <i class="bi bi-lightning-charge-fill"></i> Analyze Now
+            </button>
+          </form>
+
+          <!-- Results -->
+          <div id="results" class="mt-6 hidden">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-bold text-lg"><i class="bi bi-clipboard-data text-cyan-400 mr-2"></i>Analysis Results</h3>
+              <span id="resultCount" class="text-xs text-gray-400"></span>
+            </div>
+            <div id="findingsList" class="space-y-3"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History Sidebar -->
+      <div class="lg:col-span-2">
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+          <h2 class="font-bold text-lg mb-4"><i class="bi bi-clock-history text-gray-400 mr-2"></i>Recent Analyses</h2>
+          {% if analyses %}
+            <div class="space-y-3">
+              {% for a in analyses %}
+              <div class="p-3 bg-gray-800/50 border border-gray-700 rounded-lg cursor-pointer hover:border-cyan-500/50 transition" onclick="loadAnalysis({{ a.id }})">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded
+                    {% if a.file_type == 'kubernetes' %}bg-cyan-500/20 text-cyan-400
+                    {% elif a.file_type == 'terraform' %}bg-blue-500/20 text-blue-400
+                    {% elif a.file_type == 'dockerfile' %}bg-purple-500/20 text-purple-400
+                    {% elif a.file_type == 'cicd' %}bg-green-500/20 text-green-400
+                    {% else %}bg-orange-500/20 text-orange-400{% endif %}">{{ a.file_type }}</span>
+                  <span class="text-xs text-gray-500">{{ a.created_at.strftime('%b %d, %H:%M') }}</span>
+                </div>
+                <div class="text-xs text-gray-400 mt-2 truncate font-mono">{{ a.input_code[:60] }}...</div>
+              </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-center py-8 text-gray-500">
+              <i class="bi bi-inbox text-3xl mb-2 block"></i>
+              <p class="text-sm">No analyses yet. Run your first one!</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+const severityColors = {
+  critical: { bg: 'bg-red-500/10', border: 'border-red-500/30', badge: 'bg-red-500/20 text-red-400', text: 'text-red-300' },
+  high: { bg: 'bg-red-500/10', border: 'border-red-500/20', badge: 'bg-red-500/20 text-red-400', text: 'text-red-300' },
+  medium: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', badge: 'bg-yellow-500/20 text-yellow-400', text: 'text-yellow-300' },
+  low: { bg: 'bg-blue-500/10', border: 'border-blue-500/20', badge: 'bg-blue-500/20 text-blue-400', text: 'text-blue-300' },
+  info: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', badge: 'bg-cyan-500/20 text-cyan-400', text: 'text-cyan-300' },
+  success: { bg: 'bg-green-500/10', border: 'border-green-500/20', badge: 'bg-green-500/20 text-green-400', text: 'text-green-300' }
+};
+
+function renderFindings(findings) {
+  const list = document.getElementById('findingsList');
+  const results = document.getElementById('results');
+  const count = document.getElementById('resultCount');
+  list.innerHTML = '';
+  results.classList.remove('hidden');
+  count.textContent = findings.length + ' finding' + (findings.length !== 1 ? 's' : '');
+  findings.forEach(f => {
+    const c = severityColors[f.severity] || severityColors.info;
+    list.innerHTML += `
+      <div class="p-4 rounded-lg ${c.bg} border ${c.border}">
+        <div class="flex items-start gap-3">
+          <span class="text-xs font-bold px-2 py-0.5 rounded ${c.badge} uppercase whitespace-nowrap">${f.severity}</span>
+          <div class="flex-1">
+            <div class="font-semibold ${c.text} mb-1">${f.title}</div>
+            <div class="text-sm text-gray-400 mb-2">${f.description}</div>
+            <div class="text-xs text-gray-500"><strong class="text-gray-300">Fix:</strong> ${f.recommendation}</div>
+          </div>
+        </div>
+      </div>`;
+  });
+}
+
+document.getElementById('analysisForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('analyzeBtn');
+  const code = document.getElementById('codeInput').value.trim();
+  const fileType = document.getElementById('fileType').value;
+  if (!code) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split animate-spin"></i> Analyzing...';
+  try {
+    const res = await fetch('/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ code, file_type: fileType })
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    renderFindings(data.findings);
+  } catch (err) { alert('Analysis failed. Please try again.'); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> Analyze Now'; }
+});
+
+async function loadAnalysis(id) {
+  const res = await fetch('/analysis/' + id);
+  const data = await res.json();
+  renderFindings(data.findings);
+}
+</script>
+{% endblock %}

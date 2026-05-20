@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Pricing{% endblock %}
+{% block content %}
+<section class="py-20 px-4">
+  <div class="max-w-5xl mx-auto text-center mb-14">
+    <div class="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-3">Pricing</div>
+    <h1 class="text-3xl md:text-4xl font-black mb-4">Simple, transparent pricing</h1>
+    <p class="text-gray-400">Start free. Upgrade when you need more. Cancel anytime.</p>
+  </div>
+  <div class="max-w-5xl mx-auto grid md:grid-cols-3 gap-6">
+    <!-- Free -->
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-8 hover:border-gray-700 transition">
+      <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Free</div>
+      <div class="text-4xl font-black mb-1">$0</div>
+      <div class="text-sm text-gray-500 mb-6">Forever free</div>
+      <ul class="space-y-3 text-sm text-gray-300 mb-8">
+        <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> 10 analyses / month</li>
+        <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> All 5 file types</li>
+        <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Analysis history</li>
+        <li class="flex items-center gap-2 text-gray-500"><i class="bi bi-x-circle text-gray-600"></i> AI explanations</li>
+        <li class="flex items-center gap-2 text-gray-500"><i class="bi bi-x-circle text-gray-600"></i> API access</li>
+      </ul>
+      <a href="/register" class="block text-center py-3 rounded-lg border border-gray-700 text-gray-300 font-semibold hover:border-cyan-500 hover:text-cyan-400 transition">Get Started</a>
+    </div>
+    <!-- Pro -->
+    <div class="bg-gray-900 border-2 border-cyan-500 rounded-2xl p-8 relative shadow-lg shadow-cyan-500/10">
+      <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-xs font-bold px-4 py-1 rounded-full">Most Popular</div>
+      <div class="text-xs font-bold text-cyan-400 uppercase tracking-wider mb-2">Pro</div>
+      <div class="text-4xl font-black mb-1">$29</div>
+      <div class="text-sm text-gray-500 mb-6">per month</div>
+      <ul class="space-y-3 text-sm text-gray-300 mb-8">
+        <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Unlimited analyses</li>
+        <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> AI-powered explanations</li>
+        <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Priority processing</li>
+        <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> REST API access</li>
+        <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Export reports (PDF)</li>
+      </ul>
+      <a href="/register" class="block text-center py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold glow-cyan hover:-translate-y-0.5 transition">Start Pro Trial</a>
+    </div>
+    <!-- Team -->
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-8 hover:border-gray-700 transition">
+      <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Team</div>
+      <div class="text-4xl font-black mb-1">$99</div>
+      <div class="text-sm text-gray-500 mb-6">per month · up to 10 seats</div>
+      <ul class="space-y-3 text-sm text-gray-300 mb-8">
+        <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Everything in Pro</li>
+        <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Team dashboard</li>
+        <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Shared analysis library</li>
+        <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Slack integration</li>
+        <li class="flex items-center gap-2"><i class="bi bi-check-circle-fill text-green-400"></i> Priority support</li>
+      </ul>
+      <a href="mailto:deploypilotai@gmail.com" class="block text-center py-3 rounded-lg border border-gray-700 text-gray-300 font-semibold hover:border-cyan-500 hover:text-cyan-400 transition">Contact Sales</a>
+    </div>
+  </div>
+</section>
+{% endblock %}
