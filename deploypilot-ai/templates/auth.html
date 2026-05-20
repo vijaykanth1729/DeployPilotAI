@@ -33,15 +33,25 @@
                 </div>
                 <div>
                     <label for="password" class="block text-sm font-medium text-gray-300 mb-1.5">Password</label>
-                    <input type="password" id="password" name="password" required minlength="8"
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
-                        placeholder="Min 8 characters">
+                    <div class="relative">
+                        <input type="password" id="password" name="password" required minlength="8"
+                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 pr-11 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
+                            placeholder="Min 8 characters">
+                        <button type="button" class="toggle-pw absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition" data-target="password">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 <div>
                     <label for="confirm_password" class="block text-sm font-medium text-gray-300 mb-1.5">Confirm Password</label>
-                    <input type="password" id="confirm_password" name="confirm_password" required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
-                        placeholder="Repeat password">
+                    <div class="relative">
+                        <input type="password" id="confirm_password" name="confirm_password" required
+                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 pr-11 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
+                            placeholder="Repeat password">
+                        <button type="button" class="toggle-pw absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition" data-target="confirm_password">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-gray-900 py-3 rounded-lg font-semibold transition glow-cyan">
                     Create Account
@@ -60,9 +70,14 @@
                 </div>
                 <div>
                     <label for="password" class="block text-sm font-medium text-gray-300 mb-1.5">Password</label>
-                    <input type="password" id="password" name="password" required
-                        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
-                        placeholder="Your password">
+                    <div class="relative">
+                        <input type="password" id="password" name="password" required
+                            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 pr-11 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
+                            placeholder="Your password">
+                        <button type="button" class="toggle-pw absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition" data-target="password">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-gray-900 py-3 rounded-lg font-semibold transition glow-cyan">
                     Sign In
@@ -78,4 +93,22 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.toggle-pw').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var input = document.getElementById(this.getAttribute('data-target'));
+        var icon = this.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'bi bi-eye-slash';
+        } else {
+            input.type = 'password';
+            icon.className = 'bi bi-eye';
+        }
+    });
+});
+</script>
 {% endblock %}
