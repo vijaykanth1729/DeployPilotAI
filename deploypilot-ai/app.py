@@ -919,14 +919,29 @@ def detect_file_type(file_path, content=''):
 def analyze_content(content, file_type, file_path='unknown'):
     """Route content to the appropriate analyzer."""
     if file_type == 'kubernetes':
-        return analyze_kubernetes(content, file_path)
+        findings = analyze_kubernetes(content, file_path)
     elif file_type == 'terraform':
-        return analyze_terraform(content, file_path)
+        findings = analyze_terraform(content, file_path)
     elif file_type == 'dockerfile':
-        return analyze_dockerfile(content, file_path)
+        findings = analyze_dockerfile(content, file_path)
     elif file_type == 'cicd':
-        return analyze_cicd(content, file_path)
-    return []
+        findings = analyze_cicd(content, file_path)
+    else:
+        findings = []
+
+    # Filter out findings on lines with ignore comments
+    # Supports: # deploypilot-ignore, # deploypilot:ignore, # noqa:deploypilot
+    if findings:
+        lines = content.split('\n')
+        ignore_lines = set()
+        for i, line in enumerate(lines):
+            if any(tag in line.lower() for tag in ['deploypilot-ignore', 'deploypilot:ignore', 'noqa:deploypilot']):
+                ignore_lines.add(i + 1)  # 1-indexed line numbers
+
+        if ignore_lines:
+            findings = [f for f in findings if f.get('line_number') not in ignore_lines]
+
+    return findings
 
 
 def calculate_risk_score(findings):
