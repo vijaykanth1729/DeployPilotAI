@@ -10,17 +10,23 @@
         </div>
         <div class="flex items-center space-x-3 mt-4 sm:mt-0">
             <!-- Plan Badge -->
-            {% if current_user.plan == 'pro' %}
-            <span class="bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide">
-                <i class="bi bi-star-fill mr-1"></i>Pro Plan
-            </span>
-            {% elif current_user.plan == 'team' %}
-            <span class="bg-purple-500/10 border border-purple-500/30 text-purple-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide">
-                <i class="bi bi-people-fill mr-1"></i>Team Plan
-            </span>
+            {% if current_user.is_plan_active() %}
+                {% if current_user.days_left_in_trial() > 0 and current_user.days_left_in_trial() <= 7 %}
+                <span class="bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 px-3 py-1.5 rounded-lg text-xs font-bold tracking-wide">
+                    <i class="bi bi-star-fill mr-1"></i>Pro Trial · {{ current_user.days_left_in_trial() }}d left
+                </span>
+                {% elif current_user.plan == 'team' %}
+                <span class="bg-purple-500/10 border border-purple-500/30 text-purple-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide">
+                    <i class="bi bi-people-fill mr-1"></i>Team Plan
+                </span>
+                {% else %}
+                <span class="bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide">
+                    <i class="bi bi-star-fill mr-1"></i>Pro Plan
+                </span>
+                {% endif %}
             {% else %}
             <a href="{{ url_for('upgrade') }}" class="bg-orange-500/10 border border-orange-500/30 text-orange-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide hover:bg-orange-500/20 transition">
-                <i class="bi bi-arrow-up-circle mr-1"></i>Free Plan — Upgrade
+                <i class="bi bi-arrow-up-circle mr-1"></i>Free — Upgrade
             </a>
             {% endif %}
             <a href="{{ url_for('project_new') }}" class="bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-4 py-2 rounded-lg font-medium transition text-sm">

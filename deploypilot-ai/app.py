@@ -61,11 +61,31 @@ class User(UserMixin, db.Model):
         return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
 
     def get_plan_limit(self, key):
+        # Check if trial/plan has expired
+        if self.plan != 'free' and self.plan_expires_at:
+            if self.plan_expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+                # Plan expired — treat as free
+                return PLAN_LIMITS.get('free', {}).get(key, 0)
         return PLAN_LIMITS.get(self.plan, PLAN_LIMITS['free']).get(key, 0)
 
     def can_create_project(self):
         current_count = Project.query.filter_by(user_id=self.id).count()
         return current_count < self.get_plan_limit('projects')
+
+    def is_plan_active(self):
+        """Check if paid plan/trial is still active."""
+        if self.plan == 'free':
+            return False
+        if not self.plan_expires_at:
+            return True
+        return self.plan_expires_at.replace(tzinfo=timezone.utc) >= datetime.now(timezone.utc)
+
+    def days_left_in_trial(self):
+        """Return days left in trial/plan, or 0 if expired."""
+        if not self.plan_expires_at:
+            return 0
+        delta = self.plan_expires_at.replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)
+        return max(0, delta.days)
 
     def generate_reset_token(self):
         from datetime import timedelta
@@ -1117,11 +1137,14 @@ def register():
 
             user = User(email=email, name=name)
             user.set_password(password)
+            # Auto-activate 7-day Pro trial for new users
+            user.plan = 'pro'
+            user.plan_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
             db.session.add(user)
             db.session.commit()
 
             login_user(user)
-            flash('Welcome to InfraAudit AI!', 'success')
+            flash('🎉 Welcome! You have a 7-day Pro trial — full access to all features. Explore everything!', 'success')
             return redirect(url_for('dashboard'))
         except Exception as e:
             db.session.rollback()
@@ -1224,6 +1247,11 @@ def project_new():
                 flash('Project name is required.', 'error')
                 return render_template('project_new.html')
 
+            # Plan check: GitHub repo connection is Pro+ only
+            if repo_url and not current_user.is_plan_active():
+                flash('GitHub repo integration is a Pro feature. Free plan supports manual paste scanning only.', 'error')
+                return redirect(url_for('upgrade'))
+
             project = Project(
                 user_id=current_user.id,
                 name=name,
@@ -1293,6 +1321,22 @@ def project_delete(project_id):
 @login_required
 def project_scan(project_id):
     project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+
+    # Plan check: GitHub repo scanning is Pro+ only
+    if not current_user.is_plan_active() and project.repo_url:
+        flash('GitHub repo scanning is a Pro feature. Upgrade to scan repositories automatically.', 'error')
+        return redirect(url_for('upgrade'))
+
+    # Plan check: scan limit
+    if not current_user.is_plan_active():
+        month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        scans_this_month = Scan.query.join(Project).filter(
+            Project.user_id == current_user.id,
+            Scan.created_at >= month_start
+        ).count()
+        if scans_this_month >= PLAN_LIMITS['free']['scans_per_month']:
+            flash(f'You\'ve used all {PLAN_LIMITS["free"]["scans_per_month"]} free scans this month. Upgrade to Pro for unlimited scans.', 'error')
+            return redirect(url_for('upgrade'))
 
     if not project.repo_url:
         flash('No repository URL configured for this project.', 'error')
@@ -1386,6 +1430,11 @@ def scan_detail(scan_id):
 @app.route('/scan/<int:scan_id>/export')
 @login_required
 def scan_export(scan_id):
+    # Plan check: JSON export is Pro+ only
+    if not current_user.is_plan_active():
+        flash('JSON export is a Pro feature. Upgrade to export scan reports.', 'error')
+        return redirect(url_for('upgrade'))
+
     scan = Scan.query.join(Project).filter(
         Scan.id == scan_id,
         Project.user_id == current_user.id
@@ -1428,6 +1477,17 @@ def analyze():
     results = None
     if request.method == 'POST':
         try:
+            # Plan check: scan limit for free users
+            if not current_user.is_plan_active():
+                month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                scans_this_month = Scan.query.join(Project).filter(
+                    Project.user_id == current_user.id,
+                    Scan.created_at >= month_start
+                ).count()
+                if scans_this_month >= PLAN_LIMITS['free']['scans_per_month']:
+                    flash(f'You\'ve used all {PLAN_LIMITS["free"]["scans_per_month"]} free scans this month. Upgrade to Pro for unlimited scans.', 'error')
+                    return redirect(url_for('upgrade'))
+
             code = request.form.get('code', '')
             file_type = request.form.get('file_type', 'kubernetes')
 
