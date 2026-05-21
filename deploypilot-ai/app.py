@@ -1070,7 +1070,7 @@ def clone_and_scan_repo(repo_url, token=None):
         ]
 
         result = subprocess.run(
-            git_cmd, capture_output=True, text=True, timeout=15, env=env
+            git_cmd, capture_output=True, text=True, timeout=120, env=env
         )
 
         if result.returncode != 0:
@@ -1100,7 +1100,7 @@ def clone_and_scan_repo(repo_url, token=None):
         return unique_findings, None
 
     except subprocess.TimeoutExpired:
-        return None, 'Authentication failed or repository is too large. If this is a private repo, please provide a valid GitHub Personal Access Token.'
+        return None, 'Repository clone timed out (>2 min). The repository may be too large. Try a smaller repo or contact support.'
     except Exception as e:
         return None, f'Error scanning repository: {str(e)}'
     finally:
@@ -1575,26 +1575,33 @@ def scan_export(scan_id):
         if f.file_path:
             pdf.set_font('Helvetica', 'I', 8)
             pdf.set_text_color(100, 100, 120)
-            pdf.cell(0, 5, f'  File: {f.file_path}' + (f':{f.line_number}' if f.line_number else ''), ln=True)
+            pdf.set_x(15)
+            pdf.cell(0, 5, f'File: {f.file_path}' + (f':{f.line_number}' if f.line_number else ''), ln=True)
 
         # Description
         pdf.set_font('Helvetica', '', 9)
         pdf.set_text_color(70, 70, 90)
         desc = (f.description or '')[:300].encode('latin-1', 'replace').decode('latin-1')
-        pdf.multi_cell(180, 4.5, f'  {desc}')
+        pdf.set_x(15)
+        pdf.multi_cell(0, 4.5, desc)
 
         # Recommendation
         pdf.set_font('Helvetica', 'I', 9)
         pdf.set_text_color(16, 150, 110)
         rec = (f.recommendation or '')[:300].encode('latin-1', 'replace').decode('latin-1')
-        pdf.multi_cell(180, 4.5, f'  Recommended Fix: {rec}')
+        pdf.set_x(15)
+        pdf.multi_cell(0, 4.5, 'Fix: ' + rec)
 
         # Framework
         if f.framework:
             pdf.set_font('Helvetica', '', 8)
             pdf.set_text_color(130, 130, 150)
-            pdf.cell(0, 5, f'  Framework: {f.framework}', ln=True)
+            pdf.set_x(15)
+            pdf.cell(0, 5, f'Framework: {f.framework}', ln=True)
 
+        pdf.ln(2)
+        pdf.set_draw_color(220, 220, 230)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(4)
 
     # Output PDF
