@@ -1263,7 +1263,8 @@ def login():
                 flash('Welcome back!', 'success')
                 return redirect(next_page or url_for('dashboard'))
             else:
-                flash('Invalid email or password.', 'error')
+                flash('Invalid email or password. Please check your credentials and try again.', 'error')
+                flash('Forgot your password? Use the reset link below.', 'info')
         except Exception:
             flash('Login failed. Please try again.', 'error')
 
