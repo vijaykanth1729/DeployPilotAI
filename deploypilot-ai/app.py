@@ -170,6 +170,11 @@ PLAN_PRICES = {
 RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID', 'rzp_test_XXXXXXXXXXXXXX')
 RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', '')
 
+# Google OAuth config
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
+GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '')
+GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', 'https://deploypilotai.automationvijay.site/auth/google/callback')
+
 # Email config (Gmail SMTP or AWS SES)
 SMTP_HOST = os.getenv('SMTP_HOST', 'smtp.gmail.com')
 SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
@@ -1269,6 +1274,99 @@ def login():
             flash('Login failed. Please try again.', 'error')
 
     return render_template('auth.html', mode='login')
+
+
+@app.route('/auth/google')
+def google_login():
+    """Redirect user to Google OAuth consent screen."""
+    if not GOOGLE_CLIENT_ID:
+        flash('Google login is not configured.', 'error')
+        return redirect(url_for('login'))
+    import urllib.parse
+    params = urllib.parse.urlencode({
+        'client_id': GOOGLE_CLIENT_ID,
+        'redirect_uri': GOOGLE_REDIRECT_URI,
+        'response_type': 'code',
+        'scope': 'openid email profile',
+        'access_type': 'offline',
+        'prompt': 'select_account'
+    })
+    return redirect(f'https://accounts.google.com/o/oauth2/v2/auth?{params}')
+
+
+@app.route('/auth/google/callback')
+def google_callback():
+    """Handle Google OAuth callback."""
+    code = request.args.get('code')
+    error = request.args.get('error')
+
+    if error or not code:
+        flash('Google login was cancelled or failed.', 'error')
+        return redirect(url_for('login'))
+
+    try:
+        import urllib.request
+        import urllib.parse
+
+        # Exchange code for tokens
+        token_data = urllib.parse.urlencode({
+            'code': code,
+            'client_id': GOOGLE_CLIENT_ID,
+            'client_secret': GOOGLE_CLIENT_SECRET,
+            'redirect_uri': GOOGLE_REDIRECT_URI,
+            'grant_type': 'authorization_code'
+        }).encode()
+
+        token_req = urllib.request.Request(
+            'https://oauth2.googleapis.com/token',
+            data=token_data,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
+        with urllib.request.urlopen(token_req) as resp:
+            token_response = json.loads(resp.read().decode())
+
+        access_token = token_response.get('access_token')
+        if not access_token:
+            flash('Failed to get access token from Google.', 'error')
+            return redirect(url_for('login'))
+
+        # Get user info
+        user_info_req = urllib.request.Request(
+            'https://www.googleapis.com/oauth2/v2/userinfo',
+            headers={'Authorization': f'Bearer {access_token}'}
+        )
+        with urllib.request.urlopen(user_info_req) as resp:
+            user_info = json.loads(resp.read().decode())
+
+        email = user_info.get('email', '').lower()
+        name = user_info.get('name', email.split('@')[0])
+
+        if not email:
+            flash('Could not get email from Google account.', 'error')
+            return redirect(url_for('login'))
+
+        # Find or create user
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            # Create new user with Google OAuth
+            user = User(email=email, name=name)
+            user.set_password(uuid.uuid4().hex)  # Random password (they'll use Google to login)
+            user.plan = 'pro'
+            user.plan_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+            db.session.add(user)
+            db.session.commit()
+            login_user(user)
+            flash(f'🎉 Welcome {name}! Account created with Google. You have a 7-day Pro trial.', 'success')
+        else:
+            login_user(user)
+            flash(f'Welcome back, {user.name}!', 'success')
+
+        return redirect(url_for('dashboard'))
+
+    except Exception as e:
+        app.logger.error(f'Google OAuth error: {e}')
+        flash('Google login failed. Please try again or use email/password.', 'error')
+        return redirect(url_for('login'))
 
 
 @app.route('/logout')
