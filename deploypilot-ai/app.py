@@ -1150,6 +1150,10 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    # Show upgrade success message
+    if request.args.get('upgraded'):
+        flash(f'🎉 Welcome to the {current_user.plan.upper()} plan! You now have access to unlimited projects and scans.', 'success')
+
     projects = Project.query.filter_by(user_id=current_user.id).order_by(Project.created_at.desc()).all()
     scans = Scan.query.join(Project).filter(Project.user_id == current_user.id).order_by(Scan.created_at.desc()).limit(10).all()
 

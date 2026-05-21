@@ -54,6 +54,11 @@
                     <a href="{{ url_for('pricing') }}" class="text-gray-300 hover:text-white transition">Pricing</a>
                     <div class="flex items-center space-x-3 ml-4 pl-4 border-l border-gray-700">
                         <span class="text-sm text-gray-400">{{ current_user.name }}</span>
+                        {% if current_user.plan != 'free' %}
+                        <span class="text-xs px-2 py-0.5 rounded-full font-bold
+                            {% if current_user.plan == 'pro' %}bg-cyan-500/20 text-cyan-400
+                            {% else %}bg-purple-500/20 text-purple-400{% endif %}">{{ current_user.plan|upper }}</span>
+                        {% endif %}
                         {% if current_user.email == config.get('ADMIN_EMAIL', 'deploypilotai@gmail.com') %}
                         <a href="{{ url_for('admin_dashboard') }}" class="text-sm text-orange-400 hover:text-orange-300 transition" title="Admin">
                             <i class="bi bi-gear-fill"></i>
