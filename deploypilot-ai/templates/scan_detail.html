@@ -14,7 +14,7 @@
         <div class="flex flex-col md:flex-row items-start md:items-center justify-between">
             <div>
                 <h1 class="text-2xl font-bold text-white">Scan Results</h1>
-                <p class="text-sm text-gray-400 mt-1">{{ scan.project.name }} &middot; {{ scan.created_at.strftime('%B %d, %Y at %H:%M') }}</p>
+                <p class="text-sm text-gray-400 mt-1">{{ scan.project.name }} &middot; {{ (scan.created_at|ist).strftime('%B %d, %Y at %H:%M') }} IST</p>
             </div>
             <div class="flex items-center space-x-4 mt-4 md:mt-0">
                 <div class="text-center">
@@ -25,8 +25,8 @@
                         {% else %}text-red-400{% endif %}">{{ scan.risk_score }}</div>
                     <div class="text-xs text-gray-400 mt-1">Risk Score</div>
                 </div>
-                <a href="{{ url_for('scan_export', scan_id=scan.id) }}" class="border border-gray-700 hover:border-gray-500 text-gray-300 px-4 py-2 rounded-lg font-medium transition text-sm" target="_blank">
-                    <i class="bi bi-download mr-1"></i> Export JSON
+                <a href="{{ url_for('scan_export', scan_id=scan.id) }}" class="border border-gray-700 hover:border-cyan-500 text-gray-300 hover:text-cyan-400 px-4 py-2 rounded-lg font-medium transition text-sm">
+                    <i class="bi bi-file-earmark-pdf mr-1"></i> Download PDF Report
                 </a>
             </div>
         </div>

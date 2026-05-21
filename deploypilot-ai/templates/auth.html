@@ -36,11 +36,12 @@
                     <div class="relative">
                         <input type="password" id="password" name="password" required minlength="8"
                             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 pr-11 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition"
-                            placeholder="Min 8 characters">
+                            placeholder="Min 8 chars, A-Z, a-z, 0-9, !@#">
                         <button type="button" class="toggle-pw absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition" data-target="password">
                             <i class="bi bi-eye"></i>
                         </button>
                     </div>
+                    <p class="text-xs text-gray-500 mt-1.5">Must include: uppercase, lowercase, number, and special character</p>
                 </div>
                 <div>
                     <label for="confirm_password" class="block text-sm font-medium text-gray-300 mb-1.5">Confirm Password</label>

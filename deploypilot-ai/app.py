@@ -209,6 +209,16 @@ def inject_config():
     return {'config': {'ADMIN_EMAIL': ADMIN_EMAIL}}
 
 
+@app.template_filter('ist')
+def to_ist(dt):
+    """Convert UTC datetime to IST (UTC+5:30) for display."""
+    if dt is None:
+        return ''
+    ist_offset = timedelta(hours=5, minutes=30)
+    ist_time = dt + ist_offset
+    return ist_time
+
+
 # ============================================================
 # ANALYSIS ENGINE
 # ============================================================
@@ -1131,6 +1141,22 @@ def register():
                 flash('Password must be at least 8 characters.', 'error')
                 return render_template('auth.html', mode='register')
 
+            if not re.search(r'[A-Z]', password):
+                flash('Password must contain at least one uppercase letter.', 'error')
+                return render_template('auth.html', mode='register')
+
+            if not re.search(r'[a-z]', password):
+                flash('Password must contain at least one lowercase letter.', 'error')
+                return render_template('auth.html', mode='register')
+
+            if not re.search(r'[0-9]', password):
+                flash('Password must contain at least one number.', 'error')
+                return render_template('auth.html', mode='register')
+
+            if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+                flash('Password must contain at least one special character (!@#$%^&* etc).', 'error')
+                return render_template('auth.html', mode='register')
+
             if User.query.filter_by(email=email).first():
                 flash('Email already registered.', 'error')
                 return render_template('auth.html', mode='register')
@@ -1430,45 +1456,160 @@ def scan_detail(scan_id):
 @app.route('/scan/<int:scan_id>/export')
 @login_required
 def scan_export(scan_id):
-    # Plan check: JSON export is Pro+ only
+    # Plan check: export is Pro+ only
     if not current_user.is_plan_active():
-        flash('JSON export is a Pro feature. Upgrade to export scan reports.', 'error')
+        flash('Report export is a Pro feature. Upgrade to download scan reports.', 'error')
         return redirect(url_for('upgrade'))
 
     scan = Scan.query.join(Project).filter(
         Scan.id == scan_id,
         Project.user_id == current_user.id
     ).first_or_404()
-    findings = Finding.query.filter_by(scan_id=scan.id).all()
+    findings = Finding.query.filter_by(scan_id=scan.id).order_by(
+        db.case(
+            (Finding.severity == 'critical', 0),
+            (Finding.severity == 'high', 1),
+            (Finding.severity == 'medium', 2),
+            (Finding.severity == 'low', 3),
+            else_=4
+        )
+    ).all()
 
-    export_data = {
-        'scan_id': scan.id,
-        'project': scan.project.name,
-        'repo_url': scan.project.repo_url,
-        'status': scan.status,
-        'risk_score': scan.risk_score,
-        'scanned_at': scan.created_at.isoformat(),
-        'summary': {
-            'total_findings': scan.findings_count,
-            'critical': scan.critical_count,
-            'high': scan.high_count,
-            'medium': scan.medium_count,
-            'low': scan.low_count,
-            'info': scan.info_count
-        },
-        'findings': [{
-            'severity': f.severity,
-            'category': f.category,
-            'title': f.title,
-            'description': f.description,
-            'recommendation': f.recommendation,
-            'file_path': f.file_path,
-            'line_number': f.line_number,
-            'framework': f.framework
-        } for f in findings]
+    # Generate PDF
+    from fpdf import FPDF
+    from io import BytesIO
+
+    class PDF(FPDF):
+        def header(self):
+            self.set_font('Helvetica', 'B', 16)
+            self.set_text_color(6, 182, 212)
+            self.cell(0, 10, 'DeployPilot AI - InfraAudit Report', ln=True, align='C')
+            self.set_font('Helvetica', '', 9)
+            self.set_text_color(100, 100, 100)
+            self.cell(0, 6, f'Generated: {datetime.now(timezone.utc).strftime("%B %d, %Y %H:%M UTC")}', ln=True, align='C')
+            self.ln(5)
+            self.set_draw_color(40, 40, 60)
+            self.line(10, self.get_y(), 200, self.get_y())
+            self.ln(8)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font('Helvetica', 'I', 8)
+            self.set_text_color(150, 150, 150)
+            self.cell(0, 10, f'Page {self.page_no()} | deploypilotai.automationvijay.site', align='C')
+
+    pdf = PDF()
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+
+    # Project Info
+    pdf.set_font('Helvetica', 'B', 13)
+    pdf.set_text_color(30, 30, 50)
+    pdf.cell(0, 8, f'Project: {scan.project.name}', ln=True)
+    pdf.set_font('Helvetica', '', 10)
+    pdf.set_text_color(80, 80, 100)
+    if scan.project.repo_url:
+        pdf.cell(0, 6, f'Repository: {scan.project.repo_url}', ln=True)
+    pdf.cell(0, 6, f'Scan Date: {scan.created_at.strftime("%B %d, %Y %H:%M")}', ln=True)
+    pdf.cell(0, 6, f'Status: {scan.status.upper()}', ln=True)
+    pdf.ln(6)
+
+    # Risk Score Box
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_text_color(30, 30, 50)
+    pdf.cell(0, 8, 'Risk Score', ln=True)
+    score = scan.risk_score
+    if score >= 80:
+        pdf.set_text_color(16, 185, 129)
+    elif score >= 60:
+        pdf.set_text_color(234, 179, 8)
+    elif score >= 40:
+        pdf.set_text_color(249, 115, 22)
+    else:
+        pdf.set_text_color(239, 68, 68)
+    pdf.set_font('Helvetica', 'B', 28)
+    pdf.cell(30, 15, str(score), ln=False)
+    pdf.set_font('Helvetica', '', 10)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 15, f' / 100', ln=True)
+    pdf.ln(4)
+
+    # Summary
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_text_color(30, 30, 50)
+    pdf.cell(0, 8, 'Summary', ln=True)
+    pdf.set_font('Helvetica', '', 10)
+    pdf.set_text_color(60, 60, 80)
+    pdf.cell(0, 6, f'Total Findings: {scan.findings_count}  |  Critical: {scan.critical_count}  |  High: {scan.high_count}  |  Medium: {scan.medium_count}  |  Low: {scan.low_count}', ln=True)
+    pdf.ln(8)
+
+    # Findings
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_text_color(30, 30, 50)
+    pdf.cell(0, 8, f'Findings ({len(findings)})', ln=True)
+    pdf.ln(3)
+
+    severity_colors = {
+        'critical': (239, 68, 68),
+        'high': (249, 115, 22),
+        'medium': (234, 179, 8),
+        'low': (59, 130, 246),
+        'info': (107, 114, 128)
     }
 
-    return jsonify(export_data)
+    for i, f in enumerate(findings, 1):
+        # Check if we need a new page
+        if pdf.get_y() > 250:
+            pdf.add_page()
+
+        color = severity_colors.get(f.severity, (107, 114, 128))
+
+        # Severity + Title
+        pdf.set_font('Helvetica', 'B', 10)
+        pdf.set_text_color(*color)
+        pdf.cell(22, 6, f'[{f.severity.upper()}]', ln=False)
+        pdf.set_text_color(30, 30, 50)
+        pdf.cell(0, 6, f'{f.title}', ln=True)
+
+        # File path
+        if f.file_path:
+            pdf.set_font('Helvetica', 'I', 8)
+            pdf.set_text_color(100, 100, 120)
+            pdf.cell(0, 5, f'  File: {f.file_path}' + (f':{f.line_number}' if f.line_number else ''), ln=True)
+
+        # Description
+        pdf.set_font('Helvetica', '', 9)
+        pdf.set_text_color(70, 70, 90)
+        desc = (f.description or '')[:300].encode('latin-1', 'replace').decode('latin-1')
+        pdf.multi_cell(180, 4.5, f'  {desc}')
+
+        # Recommendation
+        pdf.set_font('Helvetica', 'I', 9)
+        pdf.set_text_color(16, 150, 110)
+        rec = (f.recommendation or '')[:300].encode('latin-1', 'replace').decode('latin-1')
+        pdf.multi_cell(180, 4.5, f'  Recommended Fix: {rec}')
+
+        # Framework
+        if f.framework:
+            pdf.set_font('Helvetica', '', 8)
+            pdf.set_text_color(130, 130, 150)
+            pdf.cell(0, 5, f'  Framework: {f.framework}', ln=True)
+
+        pdf.ln(4)
+
+    # Output PDF
+    pdf_output = BytesIO()
+    pdf.output(pdf_output)
+    pdf_output.seek(0)
+
+    from flask import send_file
+    filename = f'infraaudit-{scan.project.name.lower().replace(" ", "-")}-{scan.created_at.strftime("%Y%m%d")}.pdf'
+    return send_file(
+        pdf_output,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=filename
+    )
 
 
 @app.route('/analyze', methods=['GET', 'POST'])

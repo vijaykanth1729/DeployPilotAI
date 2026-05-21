@@ -175,7 +175,7 @@
                             <span class="text-gray-500">0</span>
                             {% endif %}
                         </td>
-                        <td class="py-3 px-2 text-gray-400">{{ scan.created_at.strftime('%b %d, %H:%M') }}</td>
+                        <td class="py-3 px-2 text-gray-400">{{ (scan.created_at|ist).strftime('%b %d, %H:%M') }}</td>
                         <td class="py-3 px-2">
                             <a href="{{ url_for('scan_detail', scan_id=scan.id) }}" class="text-cyan-400 hover:text-cyan-300 text-xs">View</a>
                         </td>

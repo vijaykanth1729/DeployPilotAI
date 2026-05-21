@@ -102,7 +102,7 @@
                         <tbody>
                             {% for scan in scans %}
                             <tr class="border-b border-gray-800/50 hover:bg-gray-800/30">
-                                <td class="py-3 px-2 text-gray-300">{{ scan.created_at.strftime('%b %d, %Y %H:%M') }}</td>
+                                <td class="py-3 px-2 text-gray-300">{{ (scan.created_at|ist).strftime('%b %d, %Y %H:%M') }}</td>
                                 <td class="py-3 px-2">
                                     <span class="font-semibold
                                         {% if scan.risk_score >= 80 %}text-green-400
