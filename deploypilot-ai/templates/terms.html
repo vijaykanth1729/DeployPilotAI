@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Terms of Service{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <h1 class="text-3xl font-bold text-white mb-2">Terms of Service</h1>
+    <p class="text-sm text-gray-500 mb-10">Last updated: May 20, 2026</p>
+
+    <div class="prose prose-invert max-w-none space-y-8 text-gray-300 text-sm leading-relaxed">
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">1. Acceptance of Terms</h2>
+            <p>By accessing or using DeployPilot AI ("InfraAudit"), you agree to be bound by these Terms of Service. If you do not agree, do not use the service.</p>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">2. Service Description</h2>
+            <p>DeployPilot AI provides an AI-powered infrastructure security scanning service that analyzes Kubernetes YAML, Terraform code, Dockerfiles, and CI/CD pipeline configurations for security misconfigurations and best practice violations.</p>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">3. Account Responsibilities</h2>
+            <ul class="list-disc list-inside space-y-2 text-gray-400">
+                <li>You are responsible for maintaining the security of your account credentials</li>
+                <li>You must provide accurate information during registration</li>
+                <li>You are responsible for all activity under your account</li>
+                <li>You must not share your account with others</li>
+                <li>You must be at least 18 years old to use this service</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">4. Acceptable Use</h2>
+            <p>You agree NOT to:</p>
+            <ul class="list-disc list-inside space-y-2 text-gray-400 mt-2">
+                <li>Use the service to scan code you don't own or have permission to scan</li>
+                <li>Attempt to reverse-engineer, decompile, or extract our scanning rules</li>
+                <li>Use the service for any illegal purpose</li>
+                <li>Overload our systems with automated requests beyond reasonable use</li>
+                <li>Resell or redistribute scan results commercially without permission</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">5. Subscription & Payments</h2>
+            <p>Paid plans are billed monthly or annually via Razorpay. You can cancel at any time — access continues until the end of your billing period. Refunds are available within 14 days of purchase.</p>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">6. Intellectual Property</h2>
+            <p>Your code remains yours. We claim no ownership over code you scan. Our scanning engine, rules, UI, and documentation are proprietary to DeployPilot AI.</p>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">7. Limitation of Liability</h2>
+            <p>InfraAudit is provided "as is" without warranty. We do not guarantee that our scans will detect all security issues. You are responsible for your own infrastructure security decisions. Our liability is limited to the amount you paid for the service in the last 12 months.</p>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">8. Termination</h2>
+            <p>We may suspend or terminate your account if you violate these terms. You may delete your account at any time by contacting deploypilotai@gmail.com.</p>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">9. Changes to Terms</h2>
+            <p>We may update these terms from time to time. Continued use of the service after changes constitutes acceptance of the new terms.</p>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">10. Contact</h2>
+            <p>Questions about these terms: <a href="mailto:deploypilotai@gmail.com" class="text-cyan-400 hover:underline">deploypilotai@gmail.com</a></p>
+            <p>DeployPilot AI · Hyderabad, India</p>
+        </section>
+    </div>
+</div>
+{% endblock %}

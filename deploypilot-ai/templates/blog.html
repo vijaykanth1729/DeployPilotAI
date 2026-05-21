@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Blog{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <div class="mb-12">
+        <h1 class="text-3xl font-bold text-white mb-3">Blog</h1>
+        <p class="text-gray-400">Insights on infrastructure security, DevOps best practices, and product updates.</p>
+    </div>
+    <div class="space-y-6">
+        <article id="post-1" class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="text-xs bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded-full font-medium">Product</span>
+                <span class="text-xs text-gray-500">May 20, 2026</span>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-3">Introducing InfraAudit: AI-Powered Infrastructure Security Scanning</h2>
+            <div class="text-gray-400 text-sm leading-relaxed space-y-3">
+                <p>Today we're launching InfraAudit — a new way to detect security misconfigurations in your Kubernetes, Terraform, and Docker files before they reach production.</p>
+                <p>Every DevOps team reviews the same issues over and over: containers running as root, S3 buckets without encryption, security groups open to the world, CI/CD pipelines with hardcoded secrets. These aren't edge cases — they're the #1 cause of cloud breaches.</p>
+                <p>InfraAudit scans your infrastructure-as-code files and gives you actionable findings in seconds. No CLI to install, no agents to deploy. Paste code or connect your GitHub repo — that's it.</p>
+                <p><strong class="text-white">What's included:</strong></p>
+                <ul class="list-disc list-inside space-y-1 text-gray-400">
+                    <li>43+ security checks across Kubernetes, Terraform, Docker, and CI/CD</li>
+                    <li>Risk scoring (0-100) with severity breakdown</li>
+                    <li>Compliance mapping to CIS, AWS Well-Architected, and Docker CIS</li>
+                    <li>GitHub repo integration for automated scanning</li>
+                    <li>JSON export for integration with your existing workflows</li>
+                </ul>
+                <p>Start scanning for free — no credit card required. <a href="{{ url_for('register') }}" class="text-cyan-400 hover:underline">Sign up here →</a></p>
+            </div>
+        </article>
+
+        <article id="post-2" class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full font-medium">Engineering</span>
+                <span class="text-xs text-gray-500">May 15, 2026</span>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-3">Top 10 Kubernetes Security Misconfigurations We Detect</h2>
+            <div class="text-gray-400 text-sm leading-relaxed space-y-3">
+                <p>After building our scanning engine, these are the most common Kubernetes security issues we find in real-world manifests:</p>
+                <ol class="list-decimal list-inside space-y-2 text-gray-400">
+                    <li><strong class="text-white">Running as root</strong> — No securityContext.runAsNonRoot set</li>
+                    <li><strong class="text-white">Missing resource limits</strong> — No CPU/memory bounds on containers</li>
+                    <li><strong class="text-white">Using :latest tag</strong> — Non-deterministic image references</li>
+                    <li><strong class="text-white">No health probes</strong> — Missing liveness/readiness checks</li>
+                    <li><strong class="text-white">Privileged containers</strong> — Full host access granted</li>
+                    <li><strong class="text-white">Writable root filesystem</strong> — readOnlyRootFilesystem not set</li>
+                    <li><strong class="text-white">Secrets in plain text</strong> — Passwords in env vars instead of Secrets</li>
+                    <li><strong class="text-white">No NetworkPolicy</strong> — All pods can talk to all pods</li>
+                    <li><strong class="text-white">Host network/PID sharing</strong> — Breaking container isolation</li>
+                    <li><strong class="text-white">Cluster-admin bindings</strong> — Overly permissive RBAC</li>
+                </ol>
+                <p>InfraAudit checks for all of these automatically. <a href="{{ url_for('register') }}" class="text-cyan-400 hover:underline">Try it free →</a></p>
+            </div>
+        </article>
+
+        <article id="post-3" class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="text-xs bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full font-medium">Tutorial</span>
+                <span class="text-xs text-gray-500">May 10, 2026</span>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-3">Securing Your Terraform: AWS Infrastructure Hardening Checklist</h2>
+            <div class="text-gray-400 text-sm leading-relaxed space-y-3">
+                <p>A practical checklist for hardening your Terraform-managed AWS infrastructure:</p>
+                <ul class="list-disc list-inside space-y-2 text-gray-400">
+                    <li><strong class="text-white">Remote backend with locking</strong> — S3 + DynamoDB, never local state</li>
+                    <li><strong class="text-white">S3 encryption</strong> — server_side_encryption_configuration on every bucket</li>
+                    <li><strong class="text-white">RDS deletion protection</strong> — Prevent accidental terraform destroy</li>
+                    <li><strong class="text-white">Security group lockdown</strong> — Never 0.0.0.0/0 on ingress</li>
+                    <li><strong class="text-white">Provider version pinning</strong> — Prevent breaking upgrades</li>
+                    <li><strong class="text-white">Sensitive variable marking</strong> — sensitive = true on secrets</li>
+                    <li><strong class="text-white">Resource tagging</strong> — Environment, Team, Project on everything</li>
+                    <li><strong class="text-white">Access logging</strong> — Enable on ALBs and CloudFront</li>
+                </ul>
+                <p>Our Terraform scanner checks all of these automatically. <a href="{{ url_for('register') }}" class="text-cyan-400 hover:underline">Scan your .tf files free →</a></p>
+            </div>
+        </article>
+    </div>
+
+    <div class="text-center mt-10 bg-gray-900 border border-gray-800 rounded-xl p-8">
+        <h3 class="text-white font-bold mb-2">Stay Updated</h3>
+        <p class="text-gray-500 text-sm mb-4">Follow us for new posts on infrastructure security and DevOps best practices.</p>
+        <div class="flex items-center justify-center gap-3">
+            <a href="https://linkedin.com/in/vijaykanth-devops" target="_blank" class="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-lg transition flex items-center gap-2">
+                <i class="bi bi-linkedin"></i> Follow on LinkedIn
+            </a>
+            <a href="https://github.com/vijaykanth1729" target="_blank" class="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-lg transition flex items-center gap-2">
+                <i class="bi bi-github"></i> Star on GitHub
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

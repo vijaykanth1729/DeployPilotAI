@@ -142,9 +142,9 @@ PLAN_LIMITS = {
 }
 
 PLAN_PRICES = {
-    'pro_monthly': {'amount': 299900, 'label': 'Pro Monthly', 'razorpay_amount': 299900},  # ₹2,999 in paise
-    'pro_yearly': {'amount': 2499900, 'label': 'Pro Yearly', 'razorpay_amount': 2499900},  # ₹24,999 in paise
-    'team_monthly': {'amount': 999900, 'label': 'Team Monthly', 'razorpay_amount': 999900},  # ₹9,999 in paise
+    'pro_monthly': {'amount': 99900, 'label': 'Pro Monthly', 'razorpay_amount': 99900},  # ₹999 in paise
+    'pro_yearly': {'amount': 799900, 'label': 'Pro Yearly', 'razorpay_amount': 799900},  # ₹7,999 in paise
+    'team_monthly': {'amount': 499900, 'label': 'Team Monthly', 'razorpay_amount': 499900},  # ₹4,999 in paise
 }
 
 RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID', 'rzp_test_XXXXXXXXXXXXXX')
@@ -1490,6 +1490,63 @@ def pricing():
 @app.route('/about')
 def about():
     return render_template('about.html')
+
+
+@app.route('/contact', methods=['GET', 'POST'])
+def contact():
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        email = request.form.get('email', '').strip()
+        message = request.form.get('message', '').strip()
+        if name and email and message:
+            # Send notification email to admin
+            email_body = f'''
+            <div style="font-family:Arial,sans-serif;max-width:500px;padding:20px;">
+                <h3 style="color:#06b6d4;margin-bottom:16px;">New Contact Form Submission</h3>
+                <p><strong>Name:</strong> {name}</p>
+                <p><strong>Email:</strong> {email}</p>
+                <p><strong>Message:</strong></p>
+                <p style="background:#f1f5f9;padding:12px;border-radius:8px;">{message}</p>
+                <hr style="margin:20px 0;border:none;border-top:1px solid #e2e8f0;">
+                <p style="color:#999;font-size:12px;">Sent from DeployPilot AI contact form</p>
+            </div>
+            '''
+            sent = send_email(ADMIN_EMAIL, f'[DeployPilot] Contact from {name} ({email})', email_body)
+            if sent:
+                flash('Message sent successfully! We\'ll get back to you within 24 hours.', 'success')
+            else:
+                # Still show success to user (we'll check logs), but log the issue
+                flash('Message received! We\'ll get back to you within 24 hours.', 'success')
+                app.logger.warning(f'Contact form: email delivery failed for {name} ({email}). Message: {message[:100]}')
+        else:
+            flash('Please fill in all fields.', 'error')
+        return redirect(url_for('contact'))
+    return render_template('contact.html')
+
+
+@app.route('/blog')
+def blog():
+    return render_template('blog.html')
+
+
+@app.route('/careers')
+def careers():
+    return render_template('careers.html')
+
+
+@app.route('/privacy')
+def privacy():
+    return render_template('privacy.html')
+
+
+@app.route('/terms')
+def terms():
+    return render_template('terms.html')
+
+
+@app.route('/security')
+def security_page():
+    return render_template('security.html')
 
 
 # ============================================================

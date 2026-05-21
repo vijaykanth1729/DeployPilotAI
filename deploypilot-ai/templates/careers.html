@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Careers{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <div class="mb-12">
+        <h1 class="text-3xl font-bold text-white mb-3">Careers at DeployPilot AI</h1>
+        <p class="text-gray-400 max-w-2xl">We're building the future of infrastructure security. Join us if you're passionate about DevOps, security, and AI.</p>
+    </div>
+
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 mb-8">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 bg-cyan-500/10 border border-cyan-500/30 rounded-lg flex items-center justify-center">
+                <i class="bi bi-building text-cyan-400"></i>
+            </div>
+            <div>
+                <h2 class="text-lg font-bold text-white">About Us</h2>
+                <p class="text-xs text-gray-500">Founded 2026 · Hyderabad, India · Remote-first</p>
+            </div>
+        </div>
+        <p class="text-gray-400 text-sm leading-relaxed">
+            DeployPilot AI is an early-stage startup building AI-powered tools for DevOps and cloud security. We're a small, focused team that values shipping fast, learning from users, and building real solutions to real problems. We work remotely and believe in async communication, deep work, and ownership.
+        </p>
+    </div>
+
+    <h2 class="text-xl font-bold text-white mb-6">Open Positions</h2>
+
+    <div class="space-y-4 mb-10">
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+                <h3 class="text-white font-semibold">Full-Stack Engineer (Python + React)</h3>
+                <p class="text-sm text-gray-400 mt-1">Build and scale our scanning platform. Flask, React, PostgreSQL, AWS.</p>
+                <div class="flex gap-2 mt-2">
+                    <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded">Remote</span>
+                    <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded">Full-time</span>
+                </div>
+            </div>
+            <a href="mailto:deploypilotai@gmail.com?subject=Application: Full-Stack Engineer" class="text-sm bg-cyan-500 text-gray-900 font-semibold px-4 py-2 rounded-lg hover:bg-cyan-400 transition flex-shrink-0">Apply →</a>
+        </div>
+
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+                <h3 class="text-white font-semibold">DevSecOps Engineer</h3>
+                <p class="text-sm text-gray-400 mt-1">Expand our scanning rules engine. Kubernetes, Terraform, OPA, CIS benchmarks.</p>
+                <div class="flex gap-2 mt-2">
+                    <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded">Remote</span>
+                    <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded">Full-time</span>
+                </div>
+            </div>
+            <a href="mailto:deploypilotai@gmail.com?subject=Application: DevSecOps Engineer" class="text-sm bg-cyan-500 text-gray-900 font-semibold px-4 py-2 rounded-lg hover:bg-cyan-400 transition flex-shrink-0">Apply →</a>
+        </div>
+
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+                <h3 class="text-white font-semibold">Developer Advocate / Technical Writer</h3>
+                <p class="text-sm text-gray-400 mt-1">Create content, tutorials, and community engagement around infrastructure security.</p>
+                <div class="flex gap-2 mt-2">
+                    <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded">Remote</span>
+                    <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded">Part-time / Contract</span>
+                </div>
+            </div>
+            <a href="mailto:deploypilotai@gmail.com?subject=Application: Developer Advocate" class="text-sm bg-cyan-500 text-gray-900 font-semibold px-4 py-2 rounded-lg hover:bg-cyan-400 transition flex-shrink-0">Apply →</a>
+        </div>
+    </div>
+
+    <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-6 text-center">
+        <p class="text-gray-400 text-sm">Don't see a role that fits? We're always looking for talented people.</p>
+        <a href="mailto:deploypilotai@gmail.com?subject=General Application" class="inline-block mt-3 text-sm text-cyan-400 hover:text-cyan-300 transition">Send us your resume →</a>
+    </div>
+</div>
+{% endblock %}

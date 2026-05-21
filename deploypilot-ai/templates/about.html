@@ -1,86 +1,188 @@
 {% extends "base.html" %}
 {% block title %}About{% endblock %}
 {% block content %}
-<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-    <div class="text-center mb-16">
-        <h1 class="text-4xl font-bold text-white mb-4">About InfraAudit AI</h1>
-        <p class="text-xl text-gray-400">Making infrastructure security accessible to every developer</p>
-    </div>
 
-    <!-- Mission -->
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 mb-8">
-        <h2 class="text-2xl font-bold text-white mb-4">Our Mission</h2>
-        <p class="text-gray-300 leading-relaxed">
-            Infrastructure misconfigurations are the #1 cause of cloud security breaches. Yet most teams
-            don't have dedicated security engineers reviewing every Terraform file, Kubernetes manifest,
-            or CI/CD pipeline. InfraAudit AI bridges that gap — providing instant, actionable security
-            feedback that helps developers ship secure infrastructure from day one.
+<!-- Hero -->
+<section class="relative overflow-hidden py-20">
+    <div class="absolute inset-0 bg-gradient-to-b from-cyan-500/5 via-purple-500/3 to-transparent"></div>
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative text-center">
+        <div class="inline-flex items-center gap-2 bg-gray-800/50 border border-gray-700 rounded-full px-4 py-1.5 mb-6">
+            <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+            <span class="text-xs text-gray-400 font-medium">Founded 2026 · Hyderabad, India</span>
+        </div>
+        <h1 class="text-4xl md:text-5xl font-bold text-white mb-5 leading-tight">
+            Making infrastructure security<br>
+            <span class="gradient-text">accessible to every team</span>
+        </h1>
+        <p class="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
+            We believe every engineering team deserves production-grade security scanning — not just those with dedicated security teams and six-figure tool budgets.
         </p>
     </div>
+</section>
 
-    <!-- Story -->
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 mb-8">
-        <h2 class="text-2xl font-bold text-white mb-4">Our Story</h2>
-        <p class="text-gray-300 leading-relaxed mb-4">
-            Founded in 2026, DeployPilot AI started with a simple observation: developers are writing
-            more infrastructure code than ever, but security tooling hasn't kept up. Traditional
-            scanners are slow, noisy, and disconnected from the developer workflow.
-        </p>
-        <p class="text-gray-300 leading-relaxed">
-            We built InfraAudit AI to be different — fast, developer-friendly, and focused on
-            actionable findings rather than overwhelming alerts. Every finding comes with a clear
-            explanation and a specific fix, mapped to industry compliance frameworks.
-        </p>
-    </div>
-
-    <!-- Team -->
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 mb-8">
-        <h2 class="text-2xl font-bold text-white mb-4">Team</h2>
-        <div class="flex items-center space-x-4">
-            <div class="w-16 h-16 bg-cyan-500/10 border border-cyan-500/30 rounded-full flex items-center justify-center">
-                <i class="bi bi-person text-cyan-400 text-2xl"></i>
+<!-- Mission & Values -->
+<section class="py-16 border-t border-gray-800">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="grid md:grid-cols-3 gap-8 mb-16">
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-7">
+                <div class="w-11 h-11 bg-cyan-500/10 border border-cyan-500/30 rounded-lg flex items-center justify-center mb-4">
+                    <i class="bi bi-bullseye text-cyan-400 text-lg"></i>
+                </div>
+                <h3 class="text-white font-bold mb-2">Our Mission</h3>
+                <p class="text-sm text-gray-400 leading-relaxed">Eliminate infrastructure misconfigurations before they reach production. Every commit scanned, every risk surfaced, every fix actionable.</p>
             </div>
-            <div>
-                <h3 class="text-lg font-semibold text-white">Vijaykanth Anugu</h3>
-                <p class="text-cyan-400 text-sm">Founder & CTO</p>
-                <p class="text-gray-400 text-sm mt-1">Cloud infrastructure and DevSecOps specialist</p>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-7">
+                <div class="w-11 h-11 bg-purple-500/10 border border-purple-500/30 rounded-lg flex items-center justify-center mb-4">
+                    <i class="bi bi-lightning-charge text-purple-400 text-lg"></i>
+                </div>
+                <h3 class="text-white font-bold mb-2">Our Approach</h3>
+                <p class="text-sm text-gray-400 leading-relaxed">Speed over complexity. No CLI installs, no agent deployments, no 30-page setup guides. Paste code or connect a repo — results in seconds.</p>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-7">
+                <div class="w-11 h-11 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center justify-center mb-4">
+                    <i class="bi bi-people text-green-400 text-lg"></i>
+                </div>
+                <h3 class="text-white font-bold mb-2">Who We Serve</h3>
+                <p class="text-sm text-gray-400 leading-relaxed">DevOps engineers, platform teams, SREs, and developers who ship infrastructure code daily and need confidence it's secure before it goes live.</p>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="bg-gradient-to-r from-gray-900 to-gray-900/50 border border-gray-800 rounded-2xl p-8 mb-16">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+                <div>
+                    <div class="text-3xl font-bold text-white">43+</div>
+                    <div class="text-sm text-gray-500 mt-1">Security Checks</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-white">4</div>
+                    <div class="text-sm text-gray-500 mt-1">File Types Supported</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-white">3</div>
+                    <div class="text-sm text-gray-500 mt-1">Compliance Frameworks</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-white">&lt;3s</div>
+                    <div class="text-sm text-gray-500 mt-1">Average Scan Time</div>
+                </div>
             </div>
         </div>
     </div>
+</section>
 
-    <!-- Tech Stack -->
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 mb-8">
-        <h2 class="text-2xl font-bold text-white mb-4">Built On</h2>
+<!-- Team -->
+<section class="py-16 border-t border-gray-800 bg-gray-900/30">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-12">
+            <h2 class="text-2xl font-bold text-white mb-3">Leadership</h2>
+            <p class="text-gray-400 text-sm">Built by engineers who've operated production infrastructure at scale</p>
+        </div>
+
+        <div class="max-w-2xl mx-auto">
+            <div class="bg-gray-900 border border-gray-800 rounded-2xl p-8">
+                <div class="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+                    <div class="w-24 h-24 bg-gradient-to-br from-cyan-500 to-purple-500 rounded-2xl flex items-center justify-center text-3xl font-bold text-white flex-shrink-0">
+                        VA
+                    </div>
+                    <div class="text-center sm:text-left">
+                        <h3 class="text-xl font-bold text-white">Vijaykanth Anugu</h3>
+                        <p class="text-cyan-400 font-medium text-sm mb-3">Founder & CTO</p>
+                        <p class="text-gray-400 text-sm leading-relaxed mb-4">
+                            Senior DevOps & AWS Cloud Engineer with deep expertise in Kubernetes, Terraform, CI/CD, and cloud security. Previously built and operated production EKS clusters, CI/CD pipelines, and observability stacks for enterprise clients across fintech and e-commerce. Now focused on automating infrastructure security through AI.
+                        </p>
+                        <div class="flex flex-wrap gap-2 mb-4">
+                            <span class="text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-lg border border-gray-700">AWS</span>
+                            <span class="text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-lg border border-gray-700">Kubernetes</span>
+                            <span class="text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-lg border border-gray-700">Terraform</span>
+                            <span class="text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-lg border border-gray-700">CI/CD</span>
+                            <span class="text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-lg border border-gray-700">Python</span>
+                            <span class="text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-lg border border-gray-700">DevSecOps</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <a href="https://linkedin.com/in/vijaykanth-devops" target="_blank" class="text-gray-500 hover:text-cyan-400 transition">
+                                <i class="bi bi-linkedin"></i>
+                            </a>
+                            <a href="https://github.com/vijaykanth1729" target="_blank" class="text-gray-500 hover:text-cyan-400 transition">
+                                <i class="bi bi-github"></i>
+                            </a>
+                            <a href="mailto:deploypilotai@gmail.com" class="text-gray-500 hover:text-cyan-400 transition">
+                                <i class="bi bi-envelope"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Tech Stack -->
+<section class="py-16 border-t border-gray-800">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-10">
+            <h2 class="text-2xl font-bold text-white mb-3">Built on AWS</h2>
+            <p class="text-gray-400 text-sm">Our infrastructure runs entirely on Amazon Web Services</p>
+        </div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="text-center p-4 bg-gray-800/50 rounded-lg">
-                <i class="bi bi-cloud text-orange-400 text-2xl mb-2"></i>
-                <p class="text-sm text-gray-300">AWS</p>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center card-hover">
+                <div class="text-2xl mb-2">☁️</div>
+                <div class="text-sm font-medium text-white">AWS EC2</div>
+                <div class="text-xs text-gray-500">Compute</div>
             </div>
-            <div class="text-center p-4 bg-gray-800/50 rounded-lg">
-                <i class="bi bi-filetype-py text-blue-400 text-2xl mb-2"></i>
-                <p class="text-sm text-gray-300">Python / Flask</p>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center card-hover">
+                <div class="text-2xl mb-2">🗄️</div>
+                <div class="text-sm font-medium text-white">AWS RDS</div>
+                <div class="text-xs text-gray-500">Database</div>
             </div>
-            <div class="text-center p-4 bg-gray-800/50 rounded-lg">
-                <i class="bi bi-box text-cyan-400 text-2xl mb-2"></i>
-                <p class="text-sm text-gray-300">Docker</p>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center card-hover">
+                <div class="text-2xl mb-2">🪣</div>
+                <div class="text-sm font-medium text-white">AWS S3</div>
+                <div class="text-xs text-gray-500">Storage</div>
             </div>
-            <div class="text-center p-4 bg-gray-800/50 rounded-lg">
-                <i class="bi bi-database text-green-400 text-2xl mb-2"></i>
-                <p class="text-sm text-gray-300">PostgreSQL</p>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center card-hover">
+                <div class="text-2xl mb-2">🌐</div>
+                <div class="text-sm font-medium text-white">CloudFront</div>
+                <div class="text-xs text-gray-500">CDN</div>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center card-hover">
+                <div class="text-2xl mb-2">📧</div>
+                <div class="text-sm font-medium text-white">AWS SES</div>
+                <div class="text-xs text-gray-500">Email</div>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center card-hover">
+                <div class="text-2xl mb-2">📊</div>
+                <div class="text-sm font-medium text-white">CloudWatch</div>
+                <div class="text-xs text-gray-500">Monitoring</div>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center card-hover">
+                <div class="text-2xl mb-2">🐳</div>
+                <div class="text-sm font-medium text-white">Docker</div>
+                <div class="text-xs text-gray-500">Containers</div>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center card-hover">
+                <div class="text-2xl mb-2">🐍</div>
+                <div class="text-sm font-medium text-white">Python + Flask</div>
+                <div class="text-xs text-gray-500">Backend</div>
             </div>
         </div>
     </div>
+</section>
 
-    <!-- Contact -->
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-8">
-        <h2 class="text-2xl font-bold text-white mb-4">Get in Touch</h2>
-        <p class="text-gray-300 mb-4">
-            Have questions, feedback, or want to discuss enterprise needs? We'd love to hear from you.
-        </p>
-        <div class="flex items-center space-x-3">
-            <i class="bi bi-envelope text-cyan-400"></i>
-            <a href="mailto:deploypilotai@gmail.com" class="text-cyan-400 hover:text-cyan-300 transition">deploypilotai@gmail.com</a>
+<!-- CTA -->
+<section class="py-16 border-t border-gray-800">
+    <div class="max-w-3xl mx-auto px-4 text-center">
+        <h2 class="text-2xl font-bold text-white mb-4">Ready to secure your infrastructure?</h2>
+        <p class="text-gray-400 mb-8 text-sm">Start scanning in under 60 seconds. No credit card required.</p>
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <a href="{{ url_for('register') }}" class="bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-8 py-3 rounded-lg font-semibold transition glow-cyan">
+                Start Free <i class="bi bi-arrow-right ml-2"></i>
+            </a>
+            <a href="{{ url_for('contact') }}" class="border border-gray-700 hover:border-gray-500 text-gray-300 px-8 py-3 rounded-lg font-medium transition">
+                Contact Us
+            </a>
         </div>
     </div>
-</div>
+</section>
+
 {% endblock %}

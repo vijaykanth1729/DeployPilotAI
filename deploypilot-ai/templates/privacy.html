@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Privacy Policy{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <h1 class="text-3xl font-bold text-white mb-2">Privacy Policy</h1>
+    <p class="text-sm text-gray-500 mb-10">Last updated: May 20, 2026</p>
+
+    <div class="prose prose-invert max-w-none space-y-8 text-gray-300 text-sm leading-relaxed">
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">1. Information We Collect</h2>
+            <p><strong class="text-white">Account Information:</strong> When you register, we collect your name, email address, and encrypted password. We never store passwords in plain text.</p>
+            <p><strong class="text-white">Usage Data:</strong> We collect scan results, project metadata, and feature usage to improve our service. We do NOT store your source code permanently — repo clones are deleted immediately after scanning.</p>
+            <p><strong class="text-white">Payment Information:</strong> Payment processing is handled by Razorpay. We do not store credit card numbers, UPI IDs, or bank details on our servers.</p>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">2. How We Use Your Information</h2>
+            <ul class="list-disc list-inside space-y-2 text-gray-400">
+                <li>To provide and maintain the InfraAudit scanning service</li>
+                <li>To process payments and manage subscriptions</li>
+                <li>To send password reset emails and critical service notifications</li>
+                <li>To improve our scanning engine and user experience</li>
+                <li>To respond to support requests</li>
+            </ul>
+            <p class="mt-3">We do NOT sell your data to third parties. We do NOT use your code for training AI models.</p>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">3. Data Storage & Security</h2>
+            <p>Your data is stored on AWS infrastructure (EC2, RDS) in secure, encrypted environments. Passwords are hashed using bcrypt. GitHub tokens are stored encrypted. All connections use HTTPS/TLS.</p>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">4. Data Retention</h2>
+            <p>Account data is retained as long as your account is active. Scan findings are retained for 12 months. You can request deletion of your account and all associated data at any time by emailing deploypilotai@gmail.com.</p>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">5. Third-Party Services</h2>
+            <ul class="list-disc list-inside space-y-2 text-gray-400">
+                <li><strong class="text-white">AWS:</strong> Cloud infrastructure hosting</li>
+                <li><strong class="text-white">Razorpay:</strong> Payment processing</li>
+                <li><strong class="text-white">GitHub:</strong> Repository access (only with your explicit token)</li>
+                <li><strong class="text-white">Gmail SMTP:</strong> Transactional emails</li>
+            </ul>
+        </section>
+
+        <section id="gdpr">
+            <h2 class="text-lg font-semibold text-white mb-3">6. GDPR & Your Rights</h2>
+            <p>If you are in the EU/EEA, you have the right to:</p>
+            <ul class="list-disc list-inside space-y-2 text-gray-400 mt-2">
+                <li>Access your personal data</li>
+                <li>Correct inaccurate data</li>
+                <li>Request deletion of your data</li>
+                <li>Export your data in a portable format</li>
+                <li>Object to processing of your data</li>
+            </ul>
+            <p class="mt-3">To exercise these rights, email deploypilotai@gmail.com with your request.</p>
+        </section>
+
+        <section>
+            <h2 class="text-lg font-semibold text-white mb-3">7. Contact</h2>
+            <p>For privacy-related questions: <a href="mailto:deploypilotai@gmail.com" class="text-cyan-400 hover:underline">deploypilotai@gmail.com</a></p>
+            <p>DeployPilot AI · Hyderabad, India</p>
+        </section>
+    </div>
+</div>
+{% endblock %}

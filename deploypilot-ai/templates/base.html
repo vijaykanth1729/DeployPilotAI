@@ -4,159 +4,296 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}InfraAudit AI{% endblock %} — DeployPilot AI</title>
+    <meta name="description" content="AI-powered infrastructure security scanner. Detect misconfigurations in Kubernetes, Terraform, Docker, and CI/CD pipelines.">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: { sans: ['Inter', 'sans-serif'] },
-                    colors: {
-                        gray: {
-                            750: '#2d3748',
-                            850: '#1a202c',
-                            950: '#0a0e1a'
-                        }
-                    }
+                    colors: { gray: { 750: '#2d3748', 850: '#1a202c', 950: '#0a0e1a' } }
                 }
             }
         }
     </script>
     <style>
         body { font-family: 'Inter', sans-serif; background: #0a0e1a; }
-        .glow-cyan { box-shadow: 0 0 20px rgba(6, 182, 212, 0.3); }
-        .glow-cyan:hover { box-shadow: 0 0 30px rgba(6, 182, 212, 0.5); }
+        .glow-cyan { box-shadow: 0 0 20px rgba(6,182,212,0.3); }
+        .glow-cyan:hover { box-shadow: 0 0 30px rgba(6,182,212,0.5); }
         .card-hover { transition: transform 0.2s, box-shadow 0.2s; }
         .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
         .gradient-text { background: linear-gradient(135deg, #06b6d4, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        /* Mobile menu animation */
+        #mobile-menu { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+        #mobile-menu.open { max-height: 400px; }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col">
-    <!-- Navigation -->
-    <nav class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-xl border-b border-gray-800">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
-                <div class="flex items-center space-x-3">
-                    <a href="{{ url_for('index') }}" class="flex items-center space-x-2">
-                        <i class="bi bi-shield-check text-cyan-400 text-2xl"></i>
-                        <span class="text-xl font-bold text-white">DeployPilot AI</span>
-                    </a>
-                    <span class="text-xs bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded-full font-medium">InfraAudit</span>
+
+<!-- ═══ NAVIGATION ═══ -->
+<nav class="sticky top-0 z-50 bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/60">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+            <!-- Logo -->
+            <a href="{{ url_for('index') }}" class="flex items-center gap-2.5 group" aria-label="DeployPilot AI Home">
+                <div class="w-9 h-9 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                    <i class="bi bi-shield-check text-white text-base"></i>
                 </div>
-                <div class="hidden md:flex items-center space-x-6">
-                    {% if current_user.is_authenticated %}
-                    <a href="{{ url_for('dashboard') }}" class="text-gray-300 hover:text-white transition">Dashboard</a>
-                    <a href="{{ url_for('projects') }}" class="text-gray-300 hover:text-white transition">Projects</a>
-                    <a href="{{ url_for('analyze') }}" class="text-gray-300 hover:text-white transition">Scan</a>
-                    <a href="{{ url_for('pricing') }}" class="text-gray-300 hover:text-white transition">Pricing</a>
-                    <div class="flex items-center space-x-3 ml-4 pl-4 border-l border-gray-700">
-                        <span class="text-sm text-gray-400">{{ current_user.name }}</span>
-                        {% if current_user.plan != 'free' %}
-                        <span class="text-xs px-2 py-0.5 rounded-full font-bold
-                            {% if current_user.plan == 'pro' %}bg-cyan-500/20 text-cyan-400
-                            {% else %}bg-purple-500/20 text-purple-400{% endif %}">{{ current_user.plan|upper }}</span>
-                        {% endif %}
-                        {% if current_user.email == config.get('ADMIN_EMAIL', 'deploypilotai@gmail.com') %}
-                        <a href="{{ url_for('admin_dashboard') }}" class="text-sm text-orange-400 hover:text-orange-300 transition" title="Admin">
-                            <i class="bi bi-gear-fill"></i>
-                        </a>
-                        {% endif %}
-                        <a href="{{ url_for('logout') }}" class="text-sm text-red-400 hover:text-red-300 transition">
-                            <i class="bi bi-box-arrow-right"></i> Logout
-                        </a>
+                <div class="flex items-baseline gap-1.5">
+                    <span class="text-lg font-extrabold text-white group-hover:text-cyan-400 transition tracking-tight">DeployPilot</span>
+                    <span class="text-lg font-extrabold text-cyan-400">AI</span>
+                </div>
+                <span class="hidden sm:inline-flex text-[0.65rem] bg-cyan-500/15 text-cyan-400 border border-cyan-500/25 px-2 py-0.5 rounded-md font-semibold tracking-wide">Infra Audit</span>
+            </a>
+
+            <!-- Desktop Nav -->
+            <div class="hidden md:flex items-center space-x-1">
+                {% if current_user.is_authenticated %}
+                <a href="{{ url_for('dashboard') }}" class="text-sm text-gray-300 hover:text-white hover:bg-gray-800/50 px-3 py-2 rounded-lg transition">Dashboard</a>
+                <a href="{{ url_for('projects') }}" class="text-sm text-gray-300 hover:text-white hover:bg-gray-800/50 px-3 py-2 rounded-lg transition">Projects</a>
+                <a href="{{ url_for('analyze') }}" class="text-sm text-gray-300 hover:text-white hover:bg-gray-800/50 px-3 py-2 rounded-lg transition">Scan</a>
+                <a href="{{ url_for('pricing') }}" class="text-sm text-gray-300 hover:text-white hover:bg-gray-800/50 px-3 py-2 rounded-lg transition">Pricing</a>
+                {% else %}
+                <a href="/#how-it-works" class="text-sm text-gray-300 hover:text-white hover:bg-gray-800/50 px-3 py-2 rounded-lg transition">Features</a>
+                <a href="{{ url_for('pricing') }}" class="text-sm text-gray-300 hover:text-white hover:bg-gray-800/50 px-3 py-2 rounded-lg transition">Pricing</a>
+                <a href="{{ url_for('blog') }}" class="text-sm text-gray-300 hover:text-white hover:bg-gray-800/50 px-3 py-2 rounded-lg transition">Blog</a>
+                <a href="{{ url_for('about') }}" class="text-sm text-gray-300 hover:text-white hover:bg-gray-800/50 px-3 py-2 rounded-lg transition">About</a>
+                <a href="{{ url_for('contact') }}" class="text-sm text-gray-300 hover:text-white hover:bg-gray-800/50 px-3 py-2 rounded-lg transition">Contact</a>
+                {% endif %}
+            </div>
+
+            <!-- Desktop Right -->
+            <div class="hidden md:flex items-center space-x-3">
+                {% if current_user.is_authenticated %}
+                    {% if current_user.plan != 'free' %}
+                    <span class="text-xs px-2.5 py-1 rounded-full font-bold border
+                        {% if current_user.plan == 'pro' %}bg-cyan-500/10 border-cyan-500/30 text-cyan-400
+                        {% else %}bg-purple-500/10 border-purple-500/30 text-purple-400{% endif %}">
+                        <i class="bi bi-star-fill mr-1" style="font-size:0.6rem"></i>{{ current_user.plan|upper }}
+                    </span>
+                    {% endif %}
+                    <div class="flex items-center gap-2 pl-3 border-l border-gray-800">
+                        <div class="w-7 h-7 bg-gradient-to-br from-cyan-500 to-purple-500 rounded-full flex items-center justify-center text-xs font-bold text-white">
+                            {{ current_user.name[0]|upper }}
+                        </div>
+                        <span class="text-sm text-gray-400">{{ current_user.name.split(' ')[0] }}</span>
                     </div>
-                    {% else %}
-                    <a href="{{ url_for('pricing') }}" class="text-gray-300 hover:text-white transition">Pricing</a>
-                    <a href="{{ url_for('about') }}" class="text-gray-300 hover:text-white transition">About</a>
-                    <a href="{{ url_for('login') }}" class="text-gray-300 hover:text-white transition">Login</a>
-                    <a href="{{ url_for('register') }}" class="bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-4 py-2 rounded-lg font-medium transition glow-cyan">
-                        Start Free
+                    {% if current_user.email == config.get('ADMIN_EMAIL', 'deploypilotai@gmail.com') %}
+                    <a href="{{ url_for('admin_dashboard') }}" class="text-orange-400 hover:text-orange-300 transition" title="Admin Console">
+                        <i class="bi bi-gear-fill"></i>
                     </a>
                     {% endif %}
-                </div>
-                <!-- Mobile menu button -->
-                <div class="md:hidden">
-                    <button id="mobile-menu-btn" class="text-gray-300 hover:text-white">
-                        <i class="bi bi-list text-2xl"></i>
-                    </button>
-                </div>
+                    <a href="{{ url_for('logout') }}" class="text-sm text-gray-500 hover:text-red-400 transition" title="Logout">
+                        <i class="bi bi-box-arrow-right"></i>
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('login') }}" class="text-sm text-gray-300 hover:text-white px-3 py-2 transition">Log in</a>
+                    <a href="{{ url_for('register') }}" class="text-sm bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-4 py-2 rounded-lg font-semibold transition glow-cyan">
+                        Start Free
+                    </a>
+                {% endif %}
             </div>
+
+            <!-- Mobile Hamburger -->
+            <button id="mobile-menu-btn" class="md:hidden w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-800 transition">
+                <i class="bi bi-list text-white text-xl" id="menu-icon"></i>
+            </button>
         </div>
-        <!-- Mobile menu -->
-        <div id="mobile-menu" class="hidden md:hidden bg-gray-900 border-t border-gray-800 px-4 py-3">
+    </div>
+
+    <!-- Mobile Menu -->
+    <div id="mobile-menu" class="md:hidden border-t border-gray-800/60 bg-gray-950/98 backdrop-blur-xl">
+        <div class="px-4 py-4 space-y-1">
             {% if current_user.is_authenticated %}
-            <a href="{{ url_for('dashboard') }}" class="block py-2 text-gray-300 hover:text-white">Dashboard</a>
-            <a href="{{ url_for('projects') }}" class="block py-2 text-gray-300 hover:text-white">Projects</a>
-            <a href="{{ url_for('analyze') }}" class="block py-2 text-gray-300 hover:text-white">Manual Scan</a>
-            <a href="{{ url_for('logout') }}" class="block py-2 text-red-400">Logout</a>
+            <!-- User info -->
+            <div class="flex items-center gap-3 px-3 py-3 mb-2 bg-gray-900/50 rounded-xl border border-gray-800">
+                <div class="w-9 h-9 bg-gradient-to-br from-cyan-500 to-purple-500 rounded-full flex items-center justify-center text-sm font-bold text-white">
+                    {{ current_user.name[0]|upper }}
+                </div>
+                <div>
+                    <div class="text-sm font-medium text-white">{{ current_user.name }}</div>
+                    <div class="text-xs text-gray-500">{{ current_user.email }}</div>
+                </div>
+                {% if current_user.plan != 'free' %}
+                <span class="ml-auto text-xs px-2 py-0.5 rounded-full font-bold
+                    {% if current_user.plan == 'pro' %}bg-cyan-500/20 text-cyan-400
+                    {% else %}bg-purple-500/20 text-purple-400{% endif %}">{{ current_user.plan|upper }}</span>
+                {% endif %}
+            </div>
+            <a href="{{ url_for('dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition">
+                <i class="bi bi-grid text-gray-500"></i> Dashboard
+            </a>
+            <a href="{{ url_for('projects') }}" class="flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition">
+                <i class="bi bi-folder text-gray-500"></i> Projects
+            </a>
+            <a href="{{ url_for('analyze') }}" class="flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition">
+                <i class="bi bi-code-slash text-gray-500"></i> Manual Scan
+            </a>
+            <a href="{{ url_for('pricing') }}" class="flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition">
+                <i class="bi bi-tag text-gray-500"></i> Pricing
+            </a>
+            {% if current_user.email == config.get('ADMIN_EMAIL', 'deploypilotai@gmail.com') %}
+            <a href="{{ url_for('admin_dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 text-orange-400 hover:bg-gray-800/50 rounded-lg transition">
+                <i class="bi bi-gear-fill text-orange-500"></i> Admin Console
+            </a>
+            {% endif %}
+            <div class="pt-2 mt-2 border-t border-gray-800">
+                <a href="{{ url_for('logout') }}" class="flex items-center gap-3 px-3 py-2.5 text-red-400 hover:bg-red-500/10 rounded-lg transition">
+                    <i class="bi bi-box-arrow-right"></i> Sign Out
+                </a>
+            </div>
             {% else %}
-            <a href="{{ url_for('login') }}" class="block py-2 text-gray-300 hover:text-white">Login</a>
-            <a href="{{ url_for('register') }}" class="block py-2 text-cyan-400">Start Free</a>
+            <a href="/#how-it-works" class="flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition">
+                <i class="bi bi-lightning-charge text-gray-500"></i> Features
+            </a>
+            <a href="{{ url_for('pricing') }}" class="flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition">
+                <i class="bi bi-tag text-gray-500"></i> Pricing
+            </a>
+            <a href="{{ url_for('about') }}" class="flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition">
+                <i class="bi bi-info-circle text-gray-500"></i> About
+            </a>
+            <a href="{{ url_for('contact') }}" class="flex items-center gap-3 px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition">
+                <i class="bi bi-envelope text-gray-500"></i> Contact
+            </a>
+            <div class="pt-3 mt-2 border-t border-gray-800 flex gap-2">
+                <a href="{{ url_for('login') }}" class="flex-1 text-center py-2.5 text-sm text-gray-300 border border-gray-700 rounded-lg hover:border-gray-500 transition">Log in</a>
+                <a href="{{ url_for('register') }}" class="flex-1 text-center py-2.5 text-sm bg-cyan-500 text-gray-900 rounded-lg font-semibold glow-cyan">Start Free</a>
+            </div>
             {% endif %}
         </div>
-    </nav>
-
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-        {% for category, message in messages %}
-        <div class="mb-2 px-4 py-3 rounded-lg border
-            {% if category == 'error' %}bg-red-500/10 border-red-500/30 text-red-400
-            {% elif category == 'success' %}bg-green-500/10 border-green-500/30 text-green-400
-            {% elif category == 'info' %}bg-blue-500/10 border-blue-500/30 text-blue-400
-            {% else %}bg-gray-500/10 border-gray-500/30 text-gray-400{% endif %}">
-            <div class="flex items-center justify-between">
-                <span>{{ message }}</span>
-                <button class="flash-close ml-4 text-current opacity-50 hover:opacity-100">&times;</button>
-            </div>
-        </div>
-        {% endfor %}
     </div>
-    {% endif %}
-    {% endwith %}
+</nav>
 
-    <!-- Main Content -->
-    <main class="flex-1">
-        {% block content %}{% endblock %}
-    </main>
+<!-- ═══ FLASH MESSAGES ═══ -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+    {% for category, message in messages %}
+    <div class="mb-2 px-4 py-3 rounded-lg border flex items-center justify-between
+        {% if category == 'error' %}bg-red-500/10 border-red-500/30 text-red-400
+        {% elif category == 'success' %}bg-green-500/10 border-green-500/30 text-green-400
+        {% elif category == 'info' %}bg-blue-500/10 border-blue-500/30 text-blue-400
+        {% else %}bg-gray-500/10 border-gray-500/30 text-gray-400{% endif %}">
+        <span class="text-sm">{{ message }}</span>
+        <button class="flash-close ml-4 text-current opacity-50 hover:opacity-100 text-lg leading-none">&times;</button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endwith %}
 
-    <!-- Footer -->
-    <footer class="bg-gray-900/50 border-t border-gray-800 mt-auto">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div class="flex flex-col md:flex-row items-center justify-between">
-                <div class="flex items-center space-x-2 mb-4 md:mb-0">
-                    <i class="bi bi-shield-check text-cyan-400"></i>
-                    <span class="text-gray-400">&copy; 2026 DeployPilot AI &middot; InfraAudit</span>
-                </div>
-                <div class="flex items-center space-x-6">
-                    <a href="{{ url_for('about') }}" class="text-gray-400 hover:text-white transition text-sm">About</a>
-                    <a href="{{ url_for('pricing') }}" class="text-gray-400 hover:text-white transition text-sm">Pricing</a>
-                    <a href="mailto:deploypilotai@gmail.com" class="text-gray-400 hover:text-white transition text-sm">Contact</a>
+<!-- ═══ MAIN CONTENT ═══ -->
+<main class="flex-1">
+    {% block content %}{% endblock %}
+</main>
+
+<!-- ═══ FOOTER ═══ -->
+<footer class="bg-gray-900/80 border-t border-gray-800 mt-auto" role="contentinfo">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
+            <!-- Brand -->
+            <div class="col-span-2">
+                <a href="{{ url_for('index') }}" class="flex items-center gap-2 mb-4" aria-label="DeployPilot AI Home">
+                    <div class="w-8 h-8 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                        <i class="bi bi-shield-check text-white text-xs"></i>
+                    </div>
+                    <span class="text-base font-extrabold text-white">DeployPilot <span class="text-cyan-400">AI</span></span>
+                </a>
+                <p class="text-sm text-gray-500 leading-relaxed mb-5 max-w-xs">AI-powered infrastructure security scanner. Detect misconfigurations in Kubernetes, Terraform, Docker & CI/CD before they reach production.</p>
+                <div class="flex items-center gap-2">
+                    <a href="https://linkedin.com/in/vijaykanth-devops" target="_blank" rel="noopener" aria-label="LinkedIn" class="w-9 h-9 bg-gray-800/80 hover:bg-cyan-500/20 border border-gray-700 hover:border-cyan-500/40 rounded-lg flex items-center justify-center text-gray-400 hover:text-cyan-400 transition">
+                        <i class="bi bi-linkedin text-sm"></i>
+                    </a>
+                    <a href="https://github.com/vijaykanth1729" target="_blank" rel="noopener" aria-label="GitHub" class="w-9 h-9 bg-gray-800/80 hover:bg-cyan-500/20 border border-gray-700 hover:border-cyan-500/40 rounded-lg flex items-center justify-center text-gray-400 hover:text-cyan-400 transition">
+                        <i class="bi bi-github text-sm"></i>
+                    </a>
+                    <a href="mailto:deploypilotai@gmail.com" aria-label="Email us" class="w-9 h-9 bg-gray-800/80 hover:bg-cyan-500/20 border border-gray-700 hover:border-cyan-500/40 rounded-lg flex items-center justify-center text-gray-400 hover:text-cyan-400 transition">
+                        <i class="bi bi-envelope text-sm"></i>
+                    </a>
                 </div>
             </div>
+            <!-- Product -->
+            <nav aria-label="Product">
+                <h4 class="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-4">Product</h4>
+                <ul class="space-y-2.5">
+                    <li><a href="/#how-it-works" class="text-sm text-gray-500 hover:text-cyan-400 transition">Features</a></li>
+                    <li><a href="{{ url_for('pricing') }}" class="text-sm text-gray-500 hover:text-cyan-400 transition">Pricing</a></li>
+                    <li><a href="{{ url_for('security_page') }}" class="text-sm text-gray-500 hover:text-cyan-400 transition">Security</a></li>
+                    <li><a href="{{ url_for('register') }}" class="text-sm text-gray-500 hover:text-cyan-400 transition">Sign Up Free</a></li>
+                </ul>
+            </nav>
+            <!-- Company -->
+            <nav aria-label="Company">
+                <h4 class="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-4">Company</h4>
+                <ul class="space-y-2.5">
+                    <li><a href="{{ url_for('about') }}" class="text-sm text-gray-500 hover:text-cyan-400 transition">About Us</a></li>
+                    <li><a href="{{ url_for('blog') }}" class="text-sm text-gray-500 hover:text-cyan-400 transition">Blog</a></li>
+                    <li><a href="{{ url_for('careers') }}" class="text-sm text-gray-500 hover:text-cyan-400 transition">Careers</a></li>
+                    <li><a href="{{ url_for('contact') }}" class="text-sm text-gray-500 hover:text-cyan-400 transition">Contact</a></li>
+                </ul>
+            </nav>
+            <!-- Legal -->
+            <nav aria-label="Legal">
+                <h4 class="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-4">Legal</h4>
+                <ul class="space-y-2.5">
+                    <li><a href="{{ url_for('privacy') }}" class="text-sm text-gray-500 hover:text-cyan-400 transition">Privacy Policy</a></li>
+                    <li><a href="{{ url_for('terms') }}" class="text-sm text-gray-500 hover:text-cyan-400 transition">Terms of Service</a></li>
+                    <li><a href="{{ url_for('privacy') }}#gdpr" class="text-sm text-gray-500 hover:text-cyan-400 transition">GDPR</a></li>
+                </ul>
+            </nav>
         </div>
-    </footer>
+        <!-- Bottom bar -->
+        <div class="pt-8 border-t border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3 flex-wrap justify-center">
+                <p class="text-xs text-gray-600">&copy; 2026 DeployPilot AI. All rights reserved.</p>
+                <span class="text-gray-800 hidden sm:inline">·</span>
+                <span class="text-xs text-gray-600 flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> All systems operational
+                </span>
+            </div>
+            <div class="flex items-center gap-3 text-xs text-gray-600">
+                <span>Built on <span class="text-orange-400/80 font-semibold">AWS</span></span>
+                <span class="text-gray-800">·</span>
+                <span>Hyderabad, India 🇮🇳</span>
+            </div>
+        </div>
+    </div>
+</footer>
 
-    <script>
-        // Mobile menu toggle
-        const menuBtn = document.getElementById('mobile-menu-btn');
-        const mobileMenu = document.getElementById('mobile-menu');
-        if (menuBtn && mobileMenu) {
-            menuBtn.addEventListener('click', function() {
-                mobileMenu.classList.toggle('hidden');
-            });
-        }
-        // Flash message close
-        document.querySelectorAll('.flash-close').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                this.closest('[class*="mb-2"]').remove();
+<!-- ═══ SCRIPTS ═══ -->
+<script>
+    // Mobile menu toggle with animation
+    const menuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    const menuIcon = document.getElementById('menu-icon');
+    if (menuBtn && mobileMenu) {
+        menuBtn.addEventListener('click', function() {
+            mobileMenu.classList.toggle('open');
+            if (mobileMenu.classList.contains('open')) {
+                menuIcon.className = 'bi bi-x-lg text-white text-xl';
+            } else {
+                menuIcon.className = 'bi bi-list text-white text-xl';
+            }
+        });
+        // Close on link click
+        mobileMenu.querySelectorAll('a').forEach(function(link) {
+            link.addEventListener('click', function() {
+                mobileMenu.classList.remove('open');
+                menuIcon.className = 'bi bi-list text-white text-xl';
             });
         });
-    </script>
-    {% block scripts %}{% endblock %}
+    }
+    // Flash message close
+    document.querySelectorAll('.flash-close').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            this.closest('[class*="mb-2"]').remove();
+        });
+    });
+</script>
+{% block scripts %}{% endblock %}
 </body>
 </html>
