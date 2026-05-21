@@ -175,6 +175,11 @@ GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '')
 GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', 'https://deploypilotai.automationvijay.site/auth/google/callback')
 
+# GitHub OAuth config
+GITHUB_OAUTH_CLIENT_ID = os.getenv('GITHUB_OAUTH_CLIENT_ID', '')
+GITHUB_OAUTH_CLIENT_SECRET = os.getenv('GITHUB_OAUTH_CLIENT_SECRET', '')
+GITHUB_OAUTH_REDIRECT_URI = os.getenv('GITHUB_OAUTH_REDIRECT_URI', 'https://deploypilotai.automationvijay.site/auth/github/callback')
+
 # Email config (Gmail SMTP or AWS SES)
 SMTP_HOST = os.getenv('SMTP_HOST', 'smtp.gmail.com')
 SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
@@ -1366,6 +1371,125 @@ def google_callback():
     except Exception as e:
         app.logger.error(f'Google OAuth error: {e}')
         flash('Google login failed. Please try again or use email/password.', 'error')
+        return redirect(url_for('login'))
+
+
+@app.route('/auth/github')
+def github_oauth_login():
+    """Redirect user to GitHub OAuth consent screen."""
+    if not GITHUB_OAUTH_CLIENT_ID:
+        flash('GitHub login is not configured.', 'error')
+        return redirect(url_for('login'))
+    import urllib.parse
+    params = urllib.parse.urlencode({
+        'client_id': GITHUB_OAUTH_CLIENT_ID,
+        'redirect_uri': GITHUB_OAUTH_REDIRECT_URI,
+        'scope': 'user:email read:user',
+    })
+    return redirect(f'https://github.com/login/oauth/authorize?{params}')
+
+
+@app.route('/auth/github/callback')
+def github_oauth_callback():
+    """Handle GitHub OAuth callback."""
+    code = request.args.get('code')
+    error = request.args.get('error')
+
+    if error or not code:
+        flash('GitHub login was cancelled or failed.', 'error')
+        return redirect(url_for('login'))
+
+    try:
+        import urllib.request
+        import urllib.parse
+
+        # Exchange code for access token
+        token_data = urllib.parse.urlencode({
+            'client_id': GITHUB_OAUTH_CLIENT_ID,
+            'client_secret': GITHUB_OAUTH_CLIENT_SECRET,
+            'code': code,
+            'redirect_uri': GITHUB_OAUTH_REDIRECT_URI,
+        }).encode()
+
+        token_req = urllib.request.Request(
+            'https://github.com/login/oauth/access_token',
+            data=token_data,
+            headers={
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
+            }
+        )
+        with urllib.request.urlopen(token_req) as resp:
+            token_response = json.loads(resp.read().decode())
+
+        access_token = token_response.get('access_token')
+        if not access_token:
+            flash('Failed to get access token from GitHub.', 'error')
+            return redirect(url_for('login'))
+
+        # Get user info
+        user_req = urllib.request.Request(
+            'https://api.github.com/user',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Accept': 'application/json'
+            }
+        )
+        with urllib.request.urlopen(user_req) as resp:
+            github_user = json.loads(resp.read().decode())
+
+        # Get primary email (may be private)
+        email = github_user.get('email')
+        if not email:
+            email_req = urllib.request.Request(
+                'https://api.github.com/user/emails',
+                headers={
+                    'Authorization': f'Bearer {access_token}',
+                    'Accept': 'application/json'
+                }
+            )
+            with urllib.request.urlopen(email_req) as resp:
+                emails = json.loads(resp.read().decode())
+            for e in emails:
+                if e.get('primary') and e.get('verified'):
+                    email = e['email']
+                    break
+            if not email and emails:
+                email = emails[0].get('email', '')
+
+        if not email:
+            flash('Could not get email from GitHub account.', 'error')
+            return redirect(url_for('login'))
+
+        email = email.lower()
+        name = github_user.get('name') or github_user.get('login', email.split('@')[0])
+
+        # Find or create user
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            user = User(email=email, name=name)
+            user.set_password(uuid.uuid4().hex)
+            user.plan = 'pro'
+            user.plan_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+            # Store GitHub token for repo scanning
+            user.github_token = access_token
+            db.session.add(user)
+            db.session.commit()
+            login_user(user)
+            flash(f'🎉 Welcome {name}! Account created with GitHub. You have a 7-day Pro trial.', 'success')
+        else:
+            # Update GitHub token if user already exists
+            if not user.github_token:
+                user.github_token = access_token
+                db.session.commit()
+            login_user(user)
+            flash(f'Welcome back, {user.name}!', 'success')
+
+        return redirect(url_for('dashboard'))
+
+    except Exception as e:
+        app.logger.error(f'GitHub OAuth error: {e}')
+        flash('GitHub login failed. Please try again or use email/password.', 'error')
         return redirect(url_for('login'))
 
 

@@ -294,6 +294,15 @@
             this.closest('[class*="mb-2"]').remove();
         });
     });
+    // Auto-dismiss flash messages after 4 seconds
+    document.querySelectorAll('[class*="mb-2"][class*="rounded-lg"]').forEach(function(msg) {
+        setTimeout(function() {
+            msg.style.transition = 'opacity 0.3s, transform 0.3s';
+            msg.style.opacity = '0';
+            msg.style.transform = 'translateY(-10px)';
+            setTimeout(function() { msg.remove(); }, 300);
+        }, 4000);
+    });
 </script>
 {% block scripts %}{% endblock %}
 </body>
