@@ -1033,34 +1033,103 @@ def scan_directory(directory_path):
     return all_findings
 
 
+def detect_git_provider(repo_url):
+    """Detect the git provider from the repository URL."""
+    url_lower = repo_url.lower()
+    if 'github.com' in url_lower:
+        return 'github'
+    elif 'gitlab.com' in url_lower or 'gitlab' in url_lower:
+        return 'gitlab'
+    elif 'bitbucket.org' in url_lower or 'bitbucket' in url_lower:
+        return 'bitbucket'
+    elif 'dev.azure.com' in url_lower or 'visualstudio.com' in url_lower:
+        return 'azure'
+    elif 'codecommit' in url_lower:
+        return 'codecommit'
+    return 'generic'
+
+
+def normalize_repo_url(repo_url):
+    """Convert SSH URLs to HTTPS format. Handles all common git URL formats."""
+    repo_url = repo_url.strip()
+
+    # Already HTTPS — return as-is
+    if repo_url.startswith('https://') or repo_url.startswith('http://'):
+        return repo_url
+
+    # SSH format: git@github.com:user/repo.git
+    ssh_match = re.match(r'git@([^:]+):(.+?)(?:\.git)?$', repo_url)
+    if ssh_match:
+        host = ssh_match.group(1)
+        path = ssh_match.group(2)
+        return f'https://{host}/{path}.git'
+
+    # SSH format: ssh://git@github.com/user/repo.git
+    ssh_url_match = re.match(r'ssh://git@([^/]+)/(.+?)(?:\.git)?$', repo_url)
+    if ssh_url_match:
+        host = ssh_url_match.group(1)
+        path = ssh_url_match.group(2)
+        return f'https://{host}/{path}.git'
+
+    # Git protocol: git://github.com/user/repo.git
+    git_match = re.match(r'git://([^/]+)/(.+?)(?:\.git)?$', repo_url)
+    if git_match:
+        host = git_match.group(1)
+        path = git_match.group(2)
+        return f'https://{host}/{path}.git'
+
+    # If nothing matches, return as-is and let git clone handle the error
+    return repo_url
+
+
+def build_authenticated_url(repo_url, token, provider):
+    """Build an authenticated clone URL based on the git provider."""
+    if not token:
+        return repo_url
+    clean_url = repo_url.rstrip('/')
+    if not clean_url.endswith('.git'):
+        clean_url += '.git'
+    if provider == 'github':
+        match = re.match(r'https?://github\.com/(.+?)(?:\.git)?$', clean_url)
+        if match:
+            return f'https://{token}@github.com/{match.group(1)}.git'
+    elif provider == 'gitlab':
+        match = re.match(r'https?://([^/]+)/(.+?)(?:\.git)?$', clean_url)
+        if match:
+            return f'https://oauth2:{token}@{match.group(1)}/{match.group(2)}.git'
+    elif provider == 'bitbucket':
+        match = re.match(r'https?://bitbucket\.org/(.+?)(?:\.git)?$', clean_url)
+        if match:
+            return f'https://x-token-auth:{token}@bitbucket.org/{match.group(1)}.git'
+    elif provider == 'azure':
+        match = re.match(r'https?://(dev\.azure\.com/.+?)(?:\.git)?$', clean_url)
+        if match:
+            return f'https://{token}@{match.group(1)}'
+    # Generic fallback
+    match = re.match(r'(https?://)(.+)', clean_url)
+    if match:
+        return f'{match.group(1)}{token}@{match.group(2)}'
+    return repo_url
+
+
 def clone_and_scan_repo(repo_url, token=None):
-    """Clone a GitHub repo and scan it for infrastructure issues."""
+    """Clone a git repository (GitHub, GitLab, Bitbucket, Azure, etc.) and scan for infrastructure issues."""
     clone_dir = os.path.join('/tmp', f'infraaudit-{uuid.uuid4().hex[:12]}')
 
     try:
-        # Build clone URL with token if provided
-        if token:
-            # Extract owner/repo from URL
-            match = re.match(r'https?://github\.com/([^/]+/[^/]+?)(?:\.git)?$', repo_url)
-            if match:
-                repo_path = match.group(1)
-                clone_url = f'https://{token}@github.com/{repo_path}.git'
-            else:
-                clone_url = repo_url
-        else:
-            # No token — try public clone but warn if it fails
-            clone_url = repo_url
+        # Normalize URL (convert SSH/git:// to HTTPS)
+        repo_url = normalize_repo_url(repo_url)
+        provider = detect_git_provider(repo_url)
+        clone_url = build_authenticated_url(repo_url, token, provider)
 
-        # Clone with depth 1 for speed
         env = os.environ.copy()
         env['GIT_TERMINAL_PROMPT'] = '0'
-        env['GIT_ASKPASS'] = '/bin/false'  # Always fail if asked for password
+        env['GIT_ASKPASS'] = '/bin/false'
         env['GIT_SSH_COMMAND'] = 'ssh -o BatchMode=yes'
         env['GIT_CONFIG_NOSYSTEM'] = '1'
         env['GIT_CONFIG_GLOBAL'] = '/dev/null'
-        env['HOME'] = clone_dir  # Isolate from user's ~/.gitconfig
+        env['HOME'] = clone_dir
 
-        # Use -c options to disable all credential helpers
         git_cmd = [
             'git',
             '-c', 'credential.helper=',
@@ -1076,19 +1145,18 @@ def clone_and_scan_repo(repo_url, token=None):
         if result.returncode != 0:
             error_msg = result.stderr.lower()
             if 'authentication' in error_msg or 'fatal: could not read' in error_msg or 'terminal prompts disabled' in error_msg:
-                return None, 'Authentication failed. This appears to be a private repository — please provide a GitHub Personal Access Token with repo scope.'
+                provider_name = provider.capitalize() if provider != 'generic' else 'Git'
+                return None, f'Authentication failed. This appears to be a private repository. Please provide a valid {provider_name} access token.'
             elif 'not found' in error_msg or 'does not exist' in error_msg:
                 return None, 'Repository not found. Check the URL and ensure the repo exists.'
             else:
                 return None, f'Failed to clone repository: {result.stderr[:200]}'
 
-        # Scan the cloned directory
         findings = scan_directory(clone_dir)
 
         if not findings:
             return [], None
 
-        # Deduplicate findings — group same issue across files, keep unique per file
         seen = set()
         unique_findings = []
         for f in findings:
@@ -1104,7 +1172,6 @@ def clone_and_scan_repo(repo_url, token=None):
     except Exception as e:
         return None, f'Error scanning repository: {str(e)}'
     finally:
-        # Clean up
         if os.path.exists(clone_dir):
             shutil.rmtree(clone_dir, ignore_errors=True)
 
@@ -1322,9 +1389,9 @@ def project_update_token(project_id):
     project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
     token = request.form.get('github_token', '').strip()
     if not token:
-        flash('Please provide a valid GitHub Personal Access Token.', 'error')
-    elif not token.startswith(('ghp_', 'github_pat_')):
-        flash('Invalid token format. GitHub PATs start with ghp_ or github_pat_.', 'error')
+        flash('Please provide a valid access token.', 'error')
+    elif len(token) < 10:
+        flash('Token seems too short. Please provide a valid access token.', 'error')
     else:
         current_user.github_token = token
         db.session.commit()
