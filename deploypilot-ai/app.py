@@ -147,6 +147,7 @@ class Finding(db.Model):
     file_path = db.Column(db.String(500), nullable=True)
     line_number = db.Column(db.Integer, nullable=True)
     framework = db.Column(db.String(50), nullable=True)
+    fix_code = db.Column(db.Text, nullable=True)
 
 
 @login_manager.user_loader
@@ -970,18 +971,275 @@ def analyze_content(content, file_type, file_path='unknown'):
         findings = []
 
     # Filter out findings on lines with ignore comments
-    # Supports: # deploypilot-ignore, # deploypilot:ignore, # noqa:deploypilot
     if findings:
         lines = content.split('\n')
         ignore_lines = set()
         for i, line in enumerate(lines):
             if any(tag in line.lower() for tag in ['deploypilot-ignore', 'deploypilot:ignore', 'noqa:deploypilot']):
-                ignore_lines.add(i + 1)  # 1-indexed line numbers
+                ignore_lines.add(i + 1)
 
         if ignore_lines:
             findings = [f for f in findings if f.get('line_number') not in ignore_lines]
 
+    # Attach fix code snippets to findings
+    for f in findings:
+        f['fix_code'] = get_fix_code(f.get('title', ''), file_type)
+
     return findings
+
+
+# Fix code snippets mapped by finding title
+FIX_CODES = {
+    # Kubernetes fixes
+    'Missing Resource Limits': '''resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi''',
+    'Missing Liveness Probe': '''livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+  initialDelaySeconds: 15
+  periodSeconds: 10''',
+    'Missing Readiness Probe': '''readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 5''',
+    'Container Running as Root': '''securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000''',
+    'Privileged Container Detected': '''securityContext:
+  privileged: false
+  allowPrivilegeEscalation: false''',
+    'Using :latest Image Tag': '''# Replace :latest with a specific version
+image: nginx:1.25.3
+# Or use SHA digest:
+# image: nginx@sha256:abc123...''',
+    'Image Without Tag': '''# Always specify an explicit tag
+image: myapp:v1.2.3''',
+    'No Namespace Specified': '''metadata:
+  name: my-app
+  namespace: production''',
+    'ClusterRoleBinding to cluster-admin': '''# Use a custom role with minimal permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: limited-role
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]''',
+    'No NetworkPolicy Defined': '''apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-ingress
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: allowed-app''',
+    'Host Network Enabled': '''spec:
+  hostNetwork: false  # Remove or set to false''',
+    'Host PID Namespace Shared': '''spec:
+  hostPID: false  # Remove or set to false''',
+    'Potential Secret in Plain Text': '''env:
+- name: DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: app-secrets
+      key: db-password''',
+    'No PodDisruptionBudget': '''apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: app-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: my-app''',
+    'Privilege Escalation Not Disabled': '''securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL''',
+    'Writable Root Filesystem': '''securityContext:
+  readOnlyRootFilesystem: true
+# Mount writable dirs as emptyDir:
+volumeMounts:
+- name: tmp
+  mountPath: /tmp
+volumes:
+- name: tmp
+  emptyDir: {}''',
+    # Terraform fixes
+    'No Remote Backend Configured': '''terraform {
+  backend "s3" {
+    bucket         = "my-terraform-state"
+    key            = "prod/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "terraform-locks"
+    encrypt        = true
+  }
+}''',
+    'S3 Bucket Without Encryption': '''resource "aws_s3_bucket_server_side_encryption_configuration" "example" {
+  bucket = aws_s3_bucket.example.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}''',
+    'S3 Bucket Without Versioning': '''resource "aws_s3_bucket_versioning" "example" {
+  bucket = aws_s3_bucket.example.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}''',
+    'Provider Without Version Constraint': '''terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}''',
+    'S3 Backend Without State Locking': '''backend "s3" {
+  bucket         = "my-terraform-state"
+  key            = "terraform.tfstate"
+  region         = "us-east-1"
+  dynamodb_table = "terraform-state-lock"
+  encrypt        = true
+}''',
+    'RDS Without Deletion Protection': '''resource "aws_db_instance" "example" {
+  # ... other config ...
+  deletion_protection = true
+}''',
+    'RDS Without Encryption at Rest': '''resource "aws_db_instance" "example" {
+  # ... other config ...
+  storage_encrypted = true
+  kms_key_id       = aws_kms_key.rds.arn
+}''',
+    'Security Group Open to World': '''ingress {
+  from_port   = 443
+  to_port     = 443
+  protocol    = "tcp"
+  cidr_blocks = ["10.0.0.0/8"]  # Restrict to known ranges
+}''',
+    'Hardcoded Credentials Detected': '''# Use variables instead of hardcoding
+variable "db_password" {
+  type      = string
+  sensitive = true
+}
+
+# Reference: var.db_password''',
+    'Resource Missing Tags': '''tags = {
+  Environment = "production"
+  Team        = "platform"
+  Project     = "my-app"
+  ManagedBy   = "terraform"
+}''',
+    # Dockerfile fixes
+    'Base Image Uses :latest Tag': '''# Pin to specific version
+FROM python:3.12-slim
+# Or use SHA digest for maximum reproducibility
+# FROM python@sha256:abc123...''',
+    'Base Image Without Version Tag': '''# Always specify a version tag
+FROM node:20-alpine''',
+    'Container Runs as Root': '''# Add non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser''',
+    'Use COPY Instead of ADD': '''# Use COPY for local files (more explicit)
+COPY ./src /app/src
+# Only use ADD for URLs or tar extraction''',
+    'No HEALTHCHECK Instruction': '''HEALTHCHECK --interval=30s --timeout=3s --retries=3 \\
+  CMD curl -f http://localhost:8080/health || exit 1''',
+    'Consider Multi-Stage Build': '''# Build stage
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Production stage
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app/dist ./dist
+CMD ["node", "dist/index.js"]''',
+    'Secret Exposed in Dockerfile': '''# Use BuildKit secrets instead
+RUN --mount=type=secret,id=api_key \\
+  cat /run/secrets/api_key > /app/.env
+
+# Or pass at runtime:
+# docker run -e API_KEY=xxx myapp''',
+    'Broad COPY Statement': '''# Be specific about what you copy
+COPY package*.json ./
+COPY src/ ./src/
+COPY config/ ./config/
+# And ensure .dockerignore excludes:
+# .git, node_modules, .env, *.log''',
+    # CI/CD fixes
+    'Hardcoded Secret in Pipeline': '''# Use GitHub Secrets
+env:
+  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+  API_KEY: ${{ secrets.API_KEY }}''',
+    'No Caching Configured': '''# GitHub Actions cache example
+- uses: actions/cache@v4
+  with:
+    path: ~/.npm
+    key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+    restore-keys: |
+      ${{ runner.os }}-node-''',
+    'No Pipeline Timeout': '''jobs:
+  build:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest''',
+    'No Test Step in Pipeline': '''- name: Run tests
+  run: npm test
+  # Or: pytest, go test ./..., mvn test''',
+    'No Pull Request Trigger': '''on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]''',
+    'No Container Image Scanning': '''- name: Scan image with Trivy
+  uses: aquasecurity/trivy-action@master
+  with:
+    image-ref: myapp:${{ github.sha }}
+    severity: CRITICAL,HIGH''',
+    'Unpinned GitHub Action': '''# Pin to full SHA instead of tag
+- uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608
+# Find SHA: go to the action repo → releases → copy commit SHA''',
+    'No Environment Protection for Deployment': '''jobs:
+  deploy:
+    environment:
+      name: production
+      url: https://myapp.com
+    # Requires manual approval in GitHub settings''',
+    'Access Logging Not Enabled': '''resource "aws_lb" "example" {
+  # ... other config ...
+  access_logs {
+    bucket  = aws_s3_bucket.lb_logs.id
+    prefix  = "lb-logs"
+    enabled = true
+  }
+}''',
+}
+
+
+def get_fix_code(title, file_type=''):
+    """Get the fix code snippet for a finding by title."""
+    return FIX_CODES.get(title, '')
 
 
 def calculate_risk_score(findings):
