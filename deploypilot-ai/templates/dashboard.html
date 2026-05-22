@@ -11,7 +11,11 @@
         <div class="flex items-center space-x-3 mt-4 sm:mt-0">
             <!-- Plan Badge -->
             {% if current_user.is_plan_active() %}
-                {% if current_user.days_left_in_trial() > 0 and current_user.days_left_in_trial() <= 7 %}
+                {% if current_user.email == config.get('ADMIN_EMAIL', 'deploypilotai@gmail.com') %}
+                <span class="bg-orange-500/10 border border-orange-500/30 text-orange-400 px-3 py-1.5 rounded-lg text-xs font-bold tracking-wide">
+                    <i class="bi bi-shield-fill mr-1"></i>Admin
+                </span>
+                {% elif current_user.days_left_in_trial() > 0 and current_user.days_left_in_trial() <= 7 %}
                 <span class="bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 px-3 py-1.5 rounded-lg text-xs font-bold tracking-wide">
                     <i class="bi bi-star-fill mr-1"></i>Pro Trial · {{ current_user.days_left_in_trial() }}d left
                 </span>
