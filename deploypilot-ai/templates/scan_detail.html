@@ -153,6 +153,22 @@
         </div>
         {% endif %}
     </div>
+
+    <!-- Review Prompt (after scan) -->
+    {% if current_user.is_authenticated %}
+    {% set user_has_reviewed = current_user.reviews|length > 0 %}
+    {% if not user_has_reviewed %}
+    <div class="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-4 mt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+            <i class="bi bi-star-fill text-yellow-400"></i>
+            <p class="text-sm text-gray-300">How was your experience? Help others discover DeployPilot AI.</p>
+        </div>
+        <a href="{{ url_for('reviews_page') }}" class="text-sm bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 px-4 py-2 rounded-lg hover:bg-yellow-500/20 transition flex-shrink-0">
+            <i class="bi bi-pencil-square mr-1"></i>Leave a Review
+        </a>
+    </div>
+    {% endif %}
+    {% endif %}
 </div>
 {% endblock %}
 

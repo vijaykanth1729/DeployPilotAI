@@ -1860,7 +1860,7 @@ def dashboard():
 
     # Check if user should be prompted to review
     has_reviewed = Review.query.filter_by(user_id=current_user.id).first() is not None
-    show_review_prompt = total_scans >= 2 and not has_reviewed
+    show_review_prompt = total_scans >= 1 and not has_reviewed
 
     return render_template('dashboard.html',
                            projects=projects,
