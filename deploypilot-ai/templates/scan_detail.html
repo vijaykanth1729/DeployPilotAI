@@ -9,6 +9,27 @@
         </a>
     </div>
 
+    <!-- Review Prompt (top, delayed) -->
+    {% if current_user.is_authenticated %}
+    {% set user_has_reviewed = current_user.reviews|length > 0 %}
+    {% if not user_has_reviewed %}
+    <div id="reviewPromptScanTop" class="mb-6 hidden">
+        <div class="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <i class="bi bi-star-fill text-yellow-400"></i>
+                <p class="text-sm text-gray-300">How was your experience? Help others discover DeployPilot AI.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="{{ url_for('reviews_page') }}" class="text-sm bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 px-4 py-2 rounded-lg hover:bg-yellow-500/20 transition flex-shrink-0">
+                    <i class="bi bi-pencil-square mr-1"></i>Leave a Review
+                </a>
+                <button class="text-gray-600 hover:text-white text-lg" onclick="this.closest('#reviewPromptScanTop').remove()">×</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
     <!-- Scan Header -->
     <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
         <div class="flex flex-col md:flex-row items-start md:items-center justify-between">
@@ -153,27 +174,6 @@
         </div>
         {% endif %}
     </div>
-
-    <!-- Review Prompt (after scan) - shown delayed -->
-    {% if current_user.is_authenticated %}
-    {% set user_has_reviewed = current_user.reviews|length > 0 %}
-    {% if not user_has_reviewed %}
-    <div id="reviewPromptScan" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 hidden">
-        <div class="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-                <i class="bi bi-star-fill text-yellow-400"></i>
-                <p class="text-sm text-gray-300">How was your experience? Help others discover DeployPilot AI.</p>
-            </div>
-            <div class="flex items-center gap-2">
-                <a href="{{ url_for('reviews_page') }}" class="text-sm bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 px-4 py-2 rounded-lg hover:bg-yellow-500/20 transition flex-shrink-0">
-                    <i class="bi bi-pencil-square mr-1"></i>Leave a Review
-                </a>
-                <button class="text-gray-600 hover:text-white text-lg" onclick="this.closest('#reviewPromptScan').remove()">×</button>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-    {% endif %}
 </div>
 {% endblock %}
 
@@ -221,7 +221,7 @@
     });
 
     // Show review prompt after flash messages disappear (5 seconds delay)
-    var reviewPrompt = document.getElementById('reviewPromptScan');
+    var reviewPrompt = document.getElementById('reviewPromptScanTop');
     if (reviewPrompt) {
         setTimeout(function() {
             reviewPrompt.classList.remove('hidden');
