@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}Reviews{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-10 gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-white mb-2">Customer Reviews</h1>
+            <p class="text-gray-400 text-sm">Real feedback from engineers using DeployPilot AI</p>
+        </div>
+        {% if reviews %}
+        <div class="bg-gray-900 border border-gray-800 rounded-xl px-5 py-3 text-center">
+            <div class="text-3xl font-bold text-white">{{ avg_rating }}</div>
+            <div class="text-yellow-400 text-sm">
+                {% for i in range(avg_rating|int) %}<i class="bi bi-star-fill"></i>{% endfor %}
+                {% if avg_rating % 1 >= 0.5 %}<i class="bi bi-star-half"></i>{% endif %}
+            </div>
+            <div class="text-xs text-gray-500 mt-1">{{ reviews|length }} review{{ 's' if reviews|length != 1 }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Submit Review Form -->
+    {% if can_review %}
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-8">
+        <h3 class="text-lg font-semibold text-white mb-4"><i class="bi bi-pencil-square mr-2 text-cyan-400"></i>Write a Review</h3>
+        <form method="POST" action="{{ url_for('submit_review') }}">
+            <!-- Star Rating -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-300 mb-2">Rating</label>
+                <input type="hidden" name="rating" id="ratingValue" required>
+                <div class="flex gap-1" id="starRating">
+                    <i class="bi bi-star text-2xl text-gray-600 cursor-pointer transition" data-star="1"></i>
+                    <i class="bi bi-star text-2xl text-gray-600 cursor-pointer transition" data-star="2"></i>
+                    <i class="bi bi-star text-2xl text-gray-600 cursor-pointer transition" data-star="3"></i>
+                    <i class="bi bi-star text-2xl text-gray-600 cursor-pointer transition" data-star="4"></i>
+                    <i class="bi bi-star text-2xl text-gray-600 cursor-pointer transition" data-star="5"></i>
+                </div>
+            </div>
+            <!-- Review Text -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-300 mb-2">Your Review</label>
+                <textarea name="text" rows="4" required minlength="10" maxlength="1000" placeholder="What did you like about DeployPilot AI? How did it help your workflow?"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm placeholder-gray-500 focus:border-cyan-500 outline-none resize-y transition"></textarea>
+                <p class="text-xs text-gray-500 mt-1">Min 10 characters, max 1000</p>
+            </div>
+            <button type="submit" class="bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-6 py-2.5 rounded-lg font-semibold transition glow-cyan text-sm">
+                <i class="bi bi-send mr-1"></i> Submit Review
+            </button>
+        </form>
+    </div>
+    {% elif user_review %}
+    <div class="bg-green-500/5 border border-green-500/20 rounded-xl p-4 mb-8 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <i class="bi bi-check-circle-fill text-green-400"></i>
+            <p class="text-green-400 text-sm font-medium">You've already submitted a review ({{ user_review.rating }}★). You can update it below.</p>
+        </div>
+        <button class="text-gray-500 hover:text-white text-lg" onclick="this.parentElement.remove()">×</button>
+    </div>
+    <!-- Edit form -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-8">
+        <h3 class="text-lg font-semibold text-white mb-4"><i class="bi bi-pencil mr-2 text-cyan-400"></i>Update Your Review</h3>
+        <form method="POST" action="{{ url_for('submit_review') }}">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-300 mb-2">Rating</label>
+                <div class="flex gap-1">
+                    {% for i in range(1, 6) %}
+                    <label class="cursor-pointer">
+                        <input type="radio" name="rating" value="{{ i }}" class="hidden peer" {% if user_review.rating == i %}checked{% endif %} required>
+                        <i class="bi bi-star text-2xl text-gray-600 peer-checked:hidden hover:text-yellow-400 transition"></i>
+                        <i class="bi bi-star-fill text-2xl text-yellow-400 hidden peer-checked:inline"></i>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="mb-4">
+                <textarea name="text" rows="4" required minlength="10" maxlength="1000"
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm placeholder-gray-500 focus:border-cyan-500 outline-none resize-y transition">{{ user_review.text }}</textarea>
+            </div>
+            <button type="submit" class="bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-6 py-2.5 rounded-lg font-semibold transition glow-cyan text-sm">
+                <i class="bi bi-arrow-repeat mr-1"></i> Update Review
+            </button>
+        </form>
+    </div>
+    {% elif current_user.is_authenticated %}
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-8 flex items-center gap-3">
+        <i class="bi bi-info-circle text-blue-400 text-xl"></i>
+        <p class="text-gray-400 text-sm">Run at least one scan to leave a review.</p>
+    </div>
+    {% else %}
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-8 flex items-center justify-between">
+        <p class="text-gray-400 text-sm"><i class="bi bi-lock mr-2"></i>Sign in to leave a review</p>
+        <a href="{{ url_for('login') }}" class="text-sm text-cyan-400 hover:text-cyan-300 transition">Sign in →</a>
+    </div>
+    {% endif %}
+
+    <!-- Reviews List -->
+    {% if reviews %}
+    <div class="space-y-4">
+        {% for review in reviews %}
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                        {{ review.user.name[0]|upper }}
+                    </div>
+                    <div>
+                        <div class="text-white font-medium text-sm">{{ review.user.name }}</div>
+                        <div class="text-xs text-gray-500">{{ (review.created_at|ist).strftime('%b %d, %Y') }}</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="text-yellow-400 text-sm">
+                        {% for i in range(review.rating) %}<i class="bi bi-star-fill"></i>{% endfor %}
+                        {% for i in range(5 - review.rating) %}<i class="bi bi-star text-gray-600"></i>{% endfor %}
+                    </div>
+                    {% if current_user.is_authenticated and current_user.email == config.get('ADMIN_EMAIL', '') %}
+                    <form method="POST" action="{{ url_for('delete_review', review_id=review.id) }}" class="inline">
+                        <button type="submit" class="text-gray-600 hover:text-red-400 transition text-xs ml-2" title="Hide review"
+                            onclick="return confirm('Hide this review?')">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            <p class="text-gray-300 text-sm leading-relaxed">{{ review.text }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-12 text-gray-500">
+        <i class="bi bi-chat-square-text text-4xl mb-3 block"></i>
+        <p class="text-lg font-medium text-gray-400">No reviews yet</p>
+        <p class="text-sm">Be the first to share your experience!</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Star rating interaction
+var stars = document.querySelectorAll('#starRating i');
+var ratingInput = document.getElementById('ratingValue');
+var currentRating = 0;
+
+function setStars(count, permanent) {
+    stars.forEach(function(star, i) {
+        if (i < count) {
+            star.className = 'bi bi-star-fill text-2xl text-yellow-400 cursor-pointer transition';
+        } else {
+            star.className = 'bi bi-star text-2xl text-gray-600 cursor-pointer transition';
+        }
+    });
+    if (permanent) {
+        currentRating = count;
+        ratingInput.value = count;
+    }
+}
+
+stars.forEach(function(star) {
+    star.addEventListener('mouseenter', function() {
+        setStars(parseInt(this.getAttribute('data-star')), false);
+    });
+    star.addEventListener('click', function() {
+        setStars(parseInt(this.getAttribute('data-star')), true);
+    });
+});
+
+document.getElementById('starRating').addEventListener('mouseleave', function() {
+    setStars(currentRating, false);
+});
+</script>
+{% endblock %}

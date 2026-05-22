@@ -36,11 +36,21 @@
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-8">
             <h2 class="text-2xl font-bold text-white mb-3">Try It Now — No Signup Required</h2>
-            <p class="text-gray-400 text-sm">Click below to scan a sample Kubernetes deployment with intentional misconfigurations</p>
+            <p class="text-gray-400 text-sm">Scan a sample or paste your own infrastructure code</p>
         </div>
         <div class="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-            <!-- Code Preview -->
-            <div class="p-5 border-b border-gray-800">
+            <!-- Tabs -->
+            <div class="flex border-b border-gray-800">
+                <button id="tabSample" class="flex-1 py-3 text-sm font-semibold text-cyan-400 border-b-2 border-cyan-400 transition">
+                    <i class="bi bi-file-code mr-1"></i> Sample Scan
+                </button>
+                <button id="tabPaste" class="flex-1 py-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-300 transition">
+                    <i class="bi bi-clipboard mr-1"></i> Paste Your Code
+                </button>
+            </div>
+
+            <!-- Sample Tab Content -->
+            <div id="sampleContent" class="p-5 border-b border-gray-800">
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-2">
                         <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
@@ -65,6 +75,22 @@ spec:
         - name: DB_PASSWORD
           value: "supersecret123"  <span class="text-red-400"># ← hardcoded secret</span></code></pre>
             </div>
+
+            <!-- Paste Tab Content (hidden by default) -->
+            <div id="pasteContent" class="p-5 border-b border-gray-800 hidden">
+                <div class="flex items-center justify-between mb-3">
+                    <select id="demoFileType" class="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-3 py-1.5 focus:border-cyan-500 outline-none">
+                        <option value="kubernetes">Kubernetes YAML</option>
+                        <option value="terraform">Terraform (.tf)</option>
+                        <option value="dockerfile">Dockerfile</option>
+                        <option value="cicd">CI/CD Pipeline</option>
+                    </select>
+                    <span class="text-xs text-gray-500">Paste your code below</span>
+                </div>
+                <textarea id="demoCodeInput" rows="10" placeholder="Paste your Kubernetes YAML, Terraform, Dockerfile, or CI/CD config here..."
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-300 font-mono placeholder-gray-600 focus:border-cyan-500 outline-none resize-y"></textarea>
+            </div>
+
             <!-- Scan Button + Results -->
             <div class="p-5">
                 <button id="demoScanBtn" class="w-full bg-cyan-500 hover:bg-cyan-400 text-gray-900 py-3 rounded-lg font-bold transition glow-cyan flex items-center justify-center gap-2">
@@ -410,7 +436,8 @@ spec:
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-12">
             <h2 class="text-3xl font-bold text-white mb-4">Trusted by DevOps Engineers</h2>
-            <p class="text-gray-400">What early users are saying about DeployPilot AI</p>
+            <p class="text-gray-400">What users are saying about DeployPilot AI</p>
+            <a href="{{ url_for('reviews_page') }}" class="text-xs text-cyan-400 hover:text-cyan-300 mt-2 inline-block">View all reviews →</a>
         </div>
         <div class="grid md:grid-cols-3 gap-6">
             <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
@@ -554,19 +581,87 @@ spec:
         <a href="{{ url_for('register') }}" class="inline-block bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-8 py-3.5 rounded-lg font-semibold transition glow-cyan text-lg">
             Start Free <i class="bi bi-arrow-right ml-2"></i>
         </a>
+
+        <!-- Newsletter -->
+        <div class="mt-12 pt-10 border-t border-gray-800">
+            <h3 class="text-lg font-semibold text-white mb-2">Stay Updated</h3>
+            <p class="text-sm text-gray-500 mb-4">Get DevOps security tips and product updates. No spam, unsubscribe anytime.</p>
+            <form id="newsletterForm" class="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
+                <input type="email" id="newsletterEmail" required placeholder="your@email.com"
+                    class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 focus:border-cyan-500 outline-none transition" />
+                <button type="submit" id="newsletterBtn" class="bg-gray-700 hover:bg-gray-600 text-white px-5 py-2.5 rounded-lg font-medium text-sm transition flex-shrink-0">
+                    Subscribe
+                </button>
+            </form>
+            <p id="newsletterMsg" class="text-xs mt-2 hidden"></p>
+        </div>
     </div>
 </section>
 {% endblock %}
 
 {% block scripts %}
 <script>
+// Tab switching
+var tabSample = document.getElementById('tabSample');
+var tabPaste = document.getElementById('tabPaste');
+var sampleContent = document.getElementById('sampleContent');
+var pasteContent = document.getElementById('pasteContent');
+var usingCustomCode = false;
+
+tabSample.addEventListener('click', function() {
+    usingCustomCode = false;
+    sampleContent.classList.remove('hidden');
+    pasteContent.classList.add('hidden');
+    tabSample.classList.add('text-cyan-400', 'border-cyan-400');
+    tabSample.classList.remove('text-gray-500', 'border-transparent');
+    tabPaste.classList.remove('text-cyan-400', 'border-cyan-400');
+    tabPaste.classList.add('text-gray-500', 'border-transparent');
+    resetScanBtn();
+});
+
+tabPaste.addEventListener('click', function() {
+    usingCustomCode = true;
+    pasteContent.classList.remove('hidden');
+    sampleContent.classList.add('hidden');
+    tabPaste.classList.add('text-cyan-400', 'border-cyan-400');
+    tabPaste.classList.remove('text-gray-500', 'border-transparent');
+    tabSample.classList.remove('text-cyan-400', 'border-cyan-400');
+    tabSample.classList.add('text-gray-500', 'border-transparent');
+    resetScanBtn();
+});
+
+function resetScanBtn() {
+    var btn = document.getElementById('demoScanBtn');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> Run Free Scan';
+    btn.className = 'w-full bg-cyan-500 hover:bg-cyan-400 text-gray-900 py-3 rounded-lg font-bold transition glow-cyan flex items-center justify-center gap-2';
+    document.getElementById('demoResults').classList.add('hidden');
+}
+
+// Demo scan
 document.getElementById('demoScanBtn').addEventListener('click', function() {
     var btn = this;
+    var body = '';
+
+    if (usingCustomCode) {
+        var code = document.getElementById('demoCodeInput').value.trim();
+        var fileType = document.getElementById('demoFileType').value;
+        if (!code) {
+            alert('Please paste some code to scan.');
+            return;
+        }
+        body = 'code=' + encodeURIComponent(code) + '&file_type=' + fileType;
+    }
+
     btn.disabled = true;
     btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Scanning...';
     var startTime = Date.now();
 
-    fetch('/demo-scan', { method: 'POST' })
+    fetch('/demo-scan', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: body
+    })
     .then(function(r) { return r.json(); })
     .then(function(data) {
         var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -589,12 +684,20 @@ document.getElementById('demoScanBtn').addEventListener('click', function() {
         var findingsHtml = '';
         data.findings.forEach(function(f) {
             var c = f.severity === 'critical' ? 'red' : f.severity === 'high' ? 'orange' : f.severity === 'medium' ? 'yellow' : 'blue';
-            findingsHtml += '<div class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">' +
-                '<div class="flex items-center gap-2 mb-1">' +
+            findingsHtml += '<details class="bg-gray-800/50 border border-gray-700 rounded-lg">' +
+                '<summary class="flex items-center gap-2 p-3 cursor-pointer hover:bg-gray-800 rounded-lg transition">' +
                 '<span class="text-xs font-bold px-1.5 py-0.5 rounded bg-' + c + '-500/20 text-' + c + '-400">' + f.severity.toUpperCase() + '</span>' +
-                '<span class="text-sm text-white font-medium">' + f.title + '</span></div>' +
-                '<p class="text-xs text-gray-400 mt-1">' + f.description + '</p>' +
-                '<p class="text-xs text-green-400/70 mt-1">Fix: ' + f.recommendation + '</p></div>';
+                '<span class="text-sm text-white font-medium">' + f.title + '</span></summary>' +
+                '<div class="px-3 pb-3 text-xs">' +
+                '<p class="text-gray-400 mb-1">' + f.description + '</p>' +
+                '<p class="text-green-400/70 mb-2">Fix: ' + f.recommendation + '</p>';
+            if (f.fix_code) {
+                findingsHtml += '<div class="bg-gray-900 border border-gray-700 rounded-lg overflow-hidden">' +
+                    '<div class="px-3 py-1.5 bg-gray-800/50 border-b border-gray-700 flex items-center justify-between">' +
+                    '<span class="text-cyan-400 font-semibold text-xs">Suggested Fix</span></div>' +
+                    '<pre class="p-3 text-gray-300 font-mono overflow-x-auto leading-relaxed">' + f.fix_code.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</pre></div>';
+            }
+            findingsHtml += '</div></details>';
         });
         document.getElementById('demoFindings').innerHTML = findingsHtml;
 
@@ -605,6 +708,40 @@ document.getElementById('demoScanBtn').addEventListener('click', function() {
     .catch(function() {
         btn.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> Run Free Scan';
         btn.disabled = false;
+    });
+});
+
+// Newsletter subscription
+document.getElementById('newsletterForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var email = document.getElementById('newsletterEmail').value.trim();
+    var btn = document.getElementById('newsletterBtn');
+    var msg = document.getElementById('newsletterMsg');
+    btn.disabled = true;
+    btn.textContent = '...';
+
+    fetch('/subscribe', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'email=' + encodeURIComponent(email)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        msg.classList.remove('hidden');
+        if (data.error) {
+            msg.textContent = data.error;
+            msg.className = 'text-xs mt-2 text-red-400';
+        } else {
+            msg.textContent = data.message;
+            msg.className = 'text-xs mt-2 text-green-400';
+            document.getElementById('newsletterEmail').value = '';
+        }
+        btn.disabled = false;
+        btn.textContent = 'Subscribe';
+    })
+    .catch(function() {
+        btn.disabled = false;
+        btn.textContent = 'Subscribe';
     });
 });
 </script>

@@ -102,5 +102,43 @@
             </table>
         </div>
     </div>
+
+    <!-- Subscribers -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mt-6">
+        <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-white">Newsletter Subscribers ({{ total_subscribers }})</h2>
+            {% if total_subscribers > 0 %}
+            <a href="{{ url_for('admin_export_subscribers') }}" class="text-xs bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 px-3 py-1.5 rounded-lg hover:bg-cyan-500/20 transition">
+                <i class="bi bi-download mr-1"></i>Export CSV
+            </a>
+            {% endif %}
+        </div>
+        {% if subscribers %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-gray-400 border-b border-gray-800 bg-gray-800/30">
+                        <th class="text-left py-3 px-4">#</th>
+                        <th class="text-left py-3 px-4">Email</th>
+                        <th class="text-left py-3 px-4">Subscribed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sub in subscribers %}
+                    <tr class="border-b border-gray-800/50 hover:bg-gray-800/20">
+                        <td class="py-2 px-4 text-gray-500">{{ loop.index }}</td>
+                        <td class="py-2 px-4 text-white">{{ sub.email }}</td>
+                        <td class="py-2 px-4 text-gray-400">{{ sub.created_at.strftime('%b %d, %Y %H:%M') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-8 text-gray-500">
+            <p class="text-sm">No subscribers yet</p>
+        </div>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}

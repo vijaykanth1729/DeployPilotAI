@@ -107,6 +107,24 @@ class Payment(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class Subscriber(db.Model):
+    __tablename__ = 'subscribers'
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Review(db.Model):
+    __tablename__ = 'reviews'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    rating = db.Column(db.Integer, nullable=False)  # 1-5 stars
+    text = db.Column(db.Text, nullable=False)
+    is_visible = db.Column(db.Boolean, default=True)  # Admin can hide reviews
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship('User', backref='reviews')
+
+
 class Project(db.Model):
     __tablename__ = 'projects'
     id = db.Column(db.Integer, primary_key=True)
@@ -1450,13 +1468,25 @@ def clone_and_scan_repo(repo_url, token=None):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Get real reviews for landing page (latest 3 visible reviews with 4+ stars)
+    real_reviews = Review.query.filter(Review.is_visible == True, Review.rating >= 4).order_by(Review.created_at.desc()).limit(3).all()
+    return render_template('index.html', real_reviews=real_reviews)
 
 
 @app.route('/demo-scan', methods=['POST'])
 def demo_scan():
     """Run a demo scan without requiring signup — shows the product value instantly."""
-    sample_k8s = """apiVersion: apps/v1
+    # Check if user pasted their own code
+    custom_code = request.form.get('code', '').strip()
+    file_type = request.form.get('file_type', 'kubernetes')
+
+    if custom_code:
+        # User pasted their own code
+        scan_code = custom_code
+    else:
+        # Use sample code
+        file_type = 'kubernetes'
+        scan_code = """apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: web-app
@@ -1481,7 +1511,7 @@ spec:
         - name: API_KEY
           value: "sk-prod-abc123xyz"
 """
-    findings = analyze_content(sample_k8s, 'kubernetes', 'demo/deployment.yaml')
+    findings = analyze_content(scan_code, file_type, 'demo/input')
     risk_score = calculate_risk_score(findings)
     counts = count_by_severity(findings)
     return jsonify({
@@ -1824,6 +1854,10 @@ def dashboard():
     trend_labels = [s.created_at.strftime('%m/%d') for s in recent_scans]
     trend_data = [s.risk_score for s in recent_scans]
 
+    # Check if user should be prompted to review
+    has_reviewed = Review.query.filter_by(user_id=current_user.id).first() is not None
+    show_review_prompt = total_scans >= 2 and not has_reviewed
+
     return render_template('dashboard.html',
                            projects=projects,
                            scans=scans,
@@ -1832,7 +1866,8 @@ def dashboard():
                            avg_risk=avg_risk,
                            total_critical=total_critical,
                            trend_labels=json.dumps(trend_labels),
-                           trend_data=json.dumps(trend_data))
+                           trend_data=json.dumps(trend_data),
+                           show_review_prompt=show_review_prompt)
 
 
 @app.route('/projects')
@@ -1993,7 +2028,8 @@ def project_scan(project_id):
                 recommendation=f['recommendation'],
                 file_path=f.get('file_path'),
                 line_number=f.get('line_number'),
-                framework=f.get('framework')
+                framework=f.get('framework'),
+                fix_code=f.get('fix_code')
             )
             db.session.add(finding)
 
@@ -2271,7 +2307,8 @@ def analyze():
                     recommendation=f['recommendation'],
                     file_path=f.get('file_path'),
                     line_number=f.get('line_number'),
-                    framework=f.get('framework')
+                    framework=f.get('framework'),
+                    fix_code=f.get('fix_code')
                 )
                 db.session.add(finding)
 
@@ -2334,6 +2371,95 @@ def contact():
     return render_template('contact.html')
 
 
+@app.route('/subscribe', methods=['POST'])
+def subscribe():
+    """Newsletter subscription — collect emails for marketing."""
+    email = request.form.get('email', '').strip().lower()
+    if not email or '@' not in email:
+        return jsonify({'error': 'Please enter a valid email'}), 400
+    existing = Subscriber.query.filter_by(email=email).first()
+    if existing:
+        return jsonify({'message': 'You\'re already subscribed!'})
+    try:
+        sub = Subscriber(email=email)
+        db.session.add(sub)
+        db.session.commit()
+        return jsonify({'message': 'Thanks for subscribing! We\'ll keep you updated.'})
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'Something went wrong. Please try again.'}), 500
+
+
+@app.route('/reviews')
+def reviews_page():
+    """Public reviews page showing all visible reviews."""
+    reviews = Review.query.filter_by(is_visible=True).order_by(Review.created_at.desc()).all()
+    avg_rating = 0
+    if reviews:
+        avg_rating = round(sum(r.rating for r in reviews) / len(reviews), 1)
+    can_review = False
+    user_review = None
+    if current_user.is_authenticated:
+        user_review = Review.query.filter_by(user_id=current_user.id).first()
+        # Can review if they've run at least 1 scan
+        scan_count = Scan.query.join(Project).filter(Project.user_id == current_user.id).count()
+        can_review = scan_count > 0 and user_review is None
+    return render_template('reviews.html', reviews=reviews, avg_rating=avg_rating,
+                           can_review=can_review, user_review=user_review)
+
+
+@app.route('/reviews/submit', methods=['POST'])
+@login_required
+def submit_review():
+    """Submit or update a review."""
+    rating = request.form.get('rating', type=int)
+    text = request.form.get('text', '').strip()
+
+    if not rating or rating < 1 or rating > 5:
+        flash('Please select a rating (1-5 stars).', 'error')
+        return redirect(url_for('reviews_page'))
+    if not text or len(text) < 10:
+        flash('Please write at least 10 characters in your review.', 'error')
+        return redirect(url_for('reviews_page'))
+    if len(text) > 1000:
+        flash('Review is too long (max 1000 characters).', 'error')
+        return redirect(url_for('reviews_page'))
+
+    # Check if user has run at least 1 scan
+    scan_count = Scan.query.join(Project).filter(Project.user_id == current_user.id).count()
+    if scan_count == 0:
+        flash('You need to run at least one scan before leaving a review.', 'error')
+        return redirect(url_for('reviews_page'))
+
+    # Check for existing review (update it)
+    existing = Review.query.filter_by(user_id=current_user.id).first()
+    if existing:
+        existing.rating = rating
+        existing.text = text
+        existing.created_at = datetime.now(timezone.utc)
+        flash('Your review has been updated!', 'success')
+    else:
+        review = Review(user_id=current_user.id, rating=rating, text=text)
+        db.session.add(review)
+        flash('Thanks for your review! It\'s now visible to everyone.', 'success')
+
+    db.session.commit()
+    return redirect(url_for('reviews_page'))
+
+
+@app.route('/reviews/<int:review_id>/delete', methods=['POST'])
+@login_required
+def delete_review(review_id):
+    """Admin: delete/hide a review."""
+    if current_user.email != ADMIN_EMAIL:
+        abort(403)
+    review = Review.query.get_or_404(review_id)
+    review.is_visible = False
+    db.session.commit()
+    flash('Review hidden.', 'success')
+    return redirect(url_for('reviews_page'))
+
+
 @app.route('/blog')
 def blog():
     return render_template('blog.html')
@@ -2357,6 +2483,65 @@ def terms():
 @app.route('/security')
 def security_page():
     return render_template('security.html')
+
+
+@app.route('/checks')
+def checks_page():
+    """Display all security checks the platform performs — SEO page."""
+    checks = {
+        'kubernetes': [
+            {'title': 'Container Running as Root', 'severity': 'critical', 'framework': 'CIS-K8S-1.8', 'description': 'Detects containers without runAsNonRoot: true in securityContext'},
+            {'title': 'Privileged Container Detected', 'severity': 'critical', 'framework': 'CIS-K8S-1.8', 'description': 'Flags containers running in privileged mode with full host access'},
+            {'title': 'ClusterRoleBinding to cluster-admin', 'severity': 'critical', 'framework': 'CIS-K8S-1.8', 'description': 'Detects overly permissive RBAC bindings granting cluster-admin'},
+            {'title': 'Missing Resource Limits', 'severity': 'high', 'framework': 'CIS-K8S-1.8', 'description': 'Containers without CPU/memory limits that can exhaust node resources'},
+            {'title': 'Privilege Escalation Not Disabled', 'severity': 'high', 'framework': 'CIS-K8S-1.8', 'description': 'allowPrivilegeEscalation not explicitly set to false'},
+            {'title': 'Host Network Enabled', 'severity': 'high', 'framework': 'CIS-K8S-1.8', 'description': 'Pod using host network namespace, bypassing network isolation'},
+            {'title': 'Host PID Namespace Shared', 'severity': 'high', 'framework': 'CIS-K8S-1.8', 'description': 'Pod sharing host PID namespace, exposing host processes'},
+            {'title': 'Potential Secret in Plain Text', 'severity': 'high', 'framework': 'CIS-K8S-1.8', 'description': 'Sensitive values hardcoded in env vars instead of using Kubernetes Secrets'},
+            {'title': 'Missing Liveness Probe', 'severity': 'medium', 'framework': 'CIS-K8S-1.8', 'description': 'No liveness probe to detect broken application state'},
+            {'title': 'Missing Readiness Probe', 'severity': 'medium', 'framework': 'CIS-K8S-1.8', 'description': 'No readiness probe to prevent traffic to unready pods'},
+            {'title': 'Using :latest Image Tag', 'severity': 'medium', 'framework': 'CIS-K8S-1.8', 'description': 'Mutable image tag that causes non-deterministic deployments'},
+            {'title': 'No NetworkPolicy Defined', 'severity': 'medium', 'framework': 'CIS-K8S-1.8', 'description': 'No network segmentation — all pods can communicate freely'},
+            {'title': 'Writable Root Filesystem', 'severity': 'medium', 'framework': 'CIS-K8S-1.8', 'description': 'readOnlyRootFilesystem not set, allowing file system modifications'},
+            {'title': 'No Namespace Specified', 'severity': 'low', 'framework': 'CIS-K8S-1.8', 'description': 'Resources deployed to default namespace without explicit namespace'},
+            {'title': 'No PodDisruptionBudget', 'severity': 'low', 'framework': 'CIS-K8S-1.8', 'description': 'Multi-replica deployment without PDB for disruption protection'},
+        ],
+        'terraform': [
+            {'title': 'Security Group Open to World', 'severity': 'critical', 'framework': 'AWS-WA-SEC', 'description': 'Ingress allows 0.0.0.0/0 — resource exposed to entire internet'},
+            {'title': 'Hardcoded Credentials Detected', 'severity': 'critical', 'framework': 'AWS-WA-SEC', 'description': 'Access keys, passwords, or tokens hardcoded in configuration'},
+            {'title': 'No Remote Backend Configured', 'severity': 'high', 'framework': 'AWS-WA-SEC', 'description': 'Terraform state stored locally, preventing collaboration and risking loss'},
+            {'title': 'S3 Bucket Without Encryption', 'severity': 'high', 'framework': 'AWS-WA-SEC', 'description': 'S3 bucket missing server-side encryption configuration'},
+            {'title': 'S3 Backend Without State Locking', 'severity': 'high', 'framework': 'AWS-WA-REL', 'description': 'S3 backend without DynamoDB locking — concurrent operations may corrupt state'},
+            {'title': 'RDS Without Deletion Protection', 'severity': 'high', 'framework': 'AWS-WA-REL', 'description': 'Database can be accidentally destroyed by terraform destroy'},
+            {'title': 'RDS Without Encryption at Rest', 'severity': 'high', 'framework': 'AWS-WA-SEC', 'description': 'Database storage not encrypted, data at rest unprotected'},
+            {'title': 'S3 Bucket Without Versioning', 'severity': 'medium', 'framework': 'AWS-WA-REL', 'description': 'No versioning — accidental deletions cannot be recovered'},
+            {'title': 'Provider Without Version Constraint', 'severity': 'medium', 'framework': 'AWS-WA-REL', 'description': 'Provider upgrades may introduce breaking changes'},
+            {'title': 'Sensitive Variable Not Marked', 'severity': 'medium', 'framework': 'AWS-WA-SEC', 'description': 'Variables with sensitive data not marked sensitive = true'},
+            {'title': 'Access Logging Not Enabled', 'severity': 'medium', 'framework': 'AWS-WA-SEC', 'description': 'Load balancer or CDN without access logging for audit trail'},
+            {'title': 'Resource Missing Tags', 'severity': 'low', 'framework': 'AWS-WA-COST', 'description': 'Resources without tags for cost allocation and management'},
+        ],
+        'dockerfile': [
+            {'title': 'Secret Exposed in Dockerfile', 'severity': 'critical', 'framework': 'DOCKER-CIS', 'description': 'Sensitive values in ARG/ENV baked into image layers permanently'},
+            {'title': 'Container Runs as Root', 'severity': 'high', 'framework': 'DOCKER-CIS', 'description': 'No USER instruction — container runs as root by default'},
+            {'title': 'Broad COPY Statement', 'severity': 'medium', 'framework': 'DOCKER-CIS', 'description': 'COPY . . includes sensitive files (.env, .git) in image'},
+            {'title': 'Base Image Uses :latest Tag', 'severity': 'medium', 'framework': 'DOCKER-CIS', 'description': 'Non-reproducible builds from mutable base image tag'},
+            {'title': 'Base Image Without Version Tag', 'severity': 'medium', 'framework': 'DOCKER-CIS', 'description': 'FROM without tag defaults to :latest implicitly'},
+            {'title': 'Use COPY Instead of ADD', 'severity': 'low', 'framework': 'DOCKER-CIS', 'description': 'ADD has implicit behaviors — COPY is more explicit and predictable'},
+            {'title': 'No HEALTHCHECK Instruction', 'severity': 'low', 'framework': 'DOCKER-CIS', 'description': 'Container health cannot be determined by orchestrators'},
+            {'title': 'Consider Multi-Stage Build', 'severity': 'low', 'framework': 'DOCKER-CIS', 'description': 'Single-stage build includes build tools in final image'},
+        ],
+        'cicd': [
+            {'title': 'Hardcoded Secret in Pipeline', 'severity': 'critical', 'framework': 'CICD-SEC', 'description': 'Passwords, tokens, or keys hardcoded in pipeline configuration'},
+            {'title': 'No Container Image Scanning', 'severity': 'high', 'framework': 'CICD-SEC', 'description': 'Images pushed without vulnerability scanning (Trivy, Snyk, Grype)'},
+            {'title': 'No Environment Protection for Deployment', 'severity': 'high', 'framework': 'CICD-SEC', 'description': 'Production deployments without manual approval or environment protection'},
+            {'title': 'No Test Step in Pipeline', 'severity': 'medium', 'framework': 'CICD-SEC', 'description': 'Code deployed without running tests — no quality gate'},
+            {'title': 'No Pull Request Trigger', 'severity': 'medium', 'framework': 'CICD-SEC', 'description': 'Changes not validated before merge to main branch'},
+            {'title': 'Unpinned GitHub Action', 'severity': 'medium', 'framework': 'CICD-SEC', 'description': 'Actions using branch/tag reference instead of SHA — supply chain risk'},
+            {'title': 'No Caching Configured', 'severity': 'low', 'framework': 'CICD-SEC', 'description': 'Dependencies downloaded fresh every build — slow pipelines'},
+            {'title': 'No Pipeline Timeout', 'severity': 'low', 'framework': 'CICD-SEC', 'description': 'Stuck pipelines consume resources indefinitely'},
+        ],
+    }
+    return render_template('checks.html', checks=checks)
 
 
 # ============================================================
@@ -2603,6 +2788,9 @@ def admin_dashboard():
     total_projects = Project.query.count()
     total_payments = Payment.query.filter_by(status='completed').count()
     total_revenue = db.session.query(db.func.sum(Payment.amount)).filter_by(status='completed').scalar() or 0
+    total_subscribers = Subscriber.query.count()
+
+    subscribers = Subscriber.query.order_by(Subscriber.created_at.desc()).all()
 
     return render_template('admin.html',
                            users=users,
@@ -2613,7 +2801,25 @@ def admin_dashboard():
                            total_scans=total_scans,
                            total_projects=total_projects,
                            total_payments=total_payments,
-                           total_revenue=total_revenue)
+                           total_revenue=total_revenue,
+                           total_subscribers=total_subscribers,
+                           subscribers=subscribers)
+
+
+@app.route('/admin/subscribers/export')
+@admin_required
+def admin_export_subscribers():
+    """Export all subscriber emails as CSV download."""
+    subscribers = Subscriber.query.order_by(Subscriber.created_at.desc()).all()
+    csv_content = "email,subscribed_at\n"
+    for s in subscribers:
+        csv_content += f"{s.email},{s.created_at.strftime('%Y-%m-%d %H:%M')}\n"
+    from flask import Response
+    return Response(
+        csv_content,
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=subscribers.csv'}
+    )
 
 
 @app.route('/admin/user/<int:user_id>')
