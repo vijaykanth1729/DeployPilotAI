@@ -31,6 +31,70 @@
     </div>
 </section>
 
+<!-- Live Demo Scan -->
+<section class="py-16 border-t border-gray-800 bg-gray-900/30" id="demo">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-8">
+            <h2 class="text-2xl font-bold text-white mb-3">Try It Now — No Signup Required</h2>
+            <p class="text-gray-400 text-sm">Click below to scan a sample Kubernetes deployment with intentional misconfigurations</p>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+            <!-- Code Preview -->
+            <div class="p-5 border-b border-gray-800">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+                        <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                        <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+                        <span class="ml-2 text-xs text-gray-500 font-mono">demo/deployment.yaml</span>
+                    </div>
+                    <span class="text-xs bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 px-2 py-0.5 rounded">Sample — has issues</span>
+                </div>
+                <pre class="text-xs text-gray-400 font-mono leading-relaxed overflow-x-auto"><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+      - name: web-app
+        image: nginx:latest        <span class="text-yellow-400"># ← :latest tag</span>
+        env:
+        - name: DB_PASSWORD
+          value: "supersecret123"  <span class="text-red-400"># ← hardcoded secret</span></code></pre>
+            </div>
+            <!-- Scan Button + Results -->
+            <div class="p-5">
+                <button id="demoScanBtn" class="w-full bg-cyan-500 hover:bg-cyan-400 text-gray-900 py-3 rounded-lg font-bold transition glow-cyan flex items-center justify-center gap-2">
+                    <i class="bi bi-lightning-charge-fill"></i> Run Free Scan
+                </button>
+                <div id="demoResults" class="hidden mt-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm font-semibold text-white">Scan Complete</span>
+                            <span class="text-xs text-gray-500" id="demoTime"></span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-400">Risk Score:</span>
+                            <span class="text-lg font-bold" id="demoScore"></span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mb-4 flex-wrap" id="demoCounts"></div>
+                    <div class="space-y-2 max-h-64 overflow-y-auto" id="demoFindings"></div>
+                    <div class="mt-5 pt-4 border-t border-gray-800 text-center">
+                        <p class="text-sm text-gray-400 mb-3">Want to scan your own repos? Sign up for full access.</p>
+                        <a href="{{ url_for('register') }}" class="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-6 py-2.5 rounded-lg font-semibold transition glow-cyan text-sm">
+                            <i class="bi bi-rocket-takeoff-fill"></i> Start Free — 7 Day Pro Trial
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- How It Works -->
 <section id="how-it-works" class="py-20 border-t border-gray-800">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -492,4 +556,56 @@
         </a>
     </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('demoScanBtn').addEventListener('click', function() {
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Scanning...';
+    var startTime = Date.now();
+
+    fetch('/demo-scan', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        document.getElementById('demoTime').textContent = elapsed + 's';
+
+        var scoreEl = document.getElementById('demoScore');
+        scoreEl.textContent = data.risk_score + '/100';
+        if (data.risk_score >= 80) scoreEl.className = 'text-lg font-bold text-green-400';
+        else if (data.risk_score >= 60) scoreEl.className = 'text-lg font-bold text-yellow-400';
+        else if (data.risk_score >= 40) scoreEl.className = 'text-lg font-bold text-orange-400';
+        else scoreEl.className = 'text-lg font-bold text-red-400';
+
+        var countsHtml = '';
+        if (data.counts.critical > 0) countsHtml += '<span class="text-xs bg-red-500/10 border border-red-500/30 text-red-400 px-2 py-1 rounded-lg font-bold">' + data.counts.critical + ' Critical</span>';
+        if (data.counts.high > 0) countsHtml += '<span class="text-xs bg-orange-500/10 border border-orange-500/30 text-orange-400 px-2 py-1 rounded-lg font-bold">' + data.counts.high + ' High</span>';
+        if (data.counts.medium > 0) countsHtml += '<span class="text-xs bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 px-2 py-1 rounded-lg font-bold">' + data.counts.medium + ' Medium</span>';
+        if (data.counts.low > 0) countsHtml += '<span class="text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 px-2 py-1 rounded-lg font-bold">' + data.counts.low + ' Low</span>';
+        document.getElementById('demoCounts').innerHTML = countsHtml;
+
+        var findingsHtml = '';
+        data.findings.forEach(function(f) {
+            var c = f.severity === 'critical' ? 'red' : f.severity === 'high' ? 'orange' : f.severity === 'medium' ? 'yellow' : 'blue';
+            findingsHtml += '<div class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">' +
+                '<div class="flex items-center gap-2 mb-1">' +
+                '<span class="text-xs font-bold px-1.5 py-0.5 rounded bg-' + c + '-500/20 text-' + c + '-400">' + f.severity.toUpperCase() + '</span>' +
+                '<span class="text-sm text-white font-medium">' + f.title + '</span></div>' +
+                '<p class="text-xs text-gray-400 mt-1">' + f.description + '</p>' +
+                '<p class="text-xs text-green-400/70 mt-1">Fix: ' + f.recommendation + '</p></div>';
+        });
+        document.getElementById('demoFindings').innerHTML = findingsHtml;
+
+        document.getElementById('demoResults').classList.remove('hidden');
+        btn.innerHTML = '<i class="bi bi-check-circle-fill"></i> Scan Complete — ' + data.total + ' findings';
+        btn.className = 'w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 bg-green-500/10 text-green-400 border border-green-500/30';
+    })
+    .catch(function() {
+        btn.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> Run Free Scan';
+        btn.disabled = false;
+    });
+});
+</script>
 {% endblock %}

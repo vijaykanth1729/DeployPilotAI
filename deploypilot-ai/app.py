@@ -1195,6 +1195,45 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/demo-scan', methods=['POST'])
+def demo_scan():
+    """Run a demo scan without requiring signup — shows the product value instantly."""
+    sample_k8s = """apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      containers:
+      - name: web-app
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+        env:
+        - name: DB_PASSWORD
+          value: "supersecret123"
+        - name: API_KEY
+          value: "sk-prod-abc123xyz"
+"""
+    findings = analyze_content(sample_k8s, 'kubernetes', 'demo/deployment.yaml')
+    risk_score = calculate_risk_score(findings)
+    counts = count_by_severity(findings)
+    return jsonify({
+        'risk_score': risk_score,
+        'findings': findings,
+        'counts': counts,
+        'total': len(findings)
+    })
+
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
