@@ -69,11 +69,15 @@ class User(UserMixin, db.Model):
         return PLAN_LIMITS.get(self.plan, PLAN_LIMITS['free']).get(key, 0)
 
     def can_create_project(self):
+        if self.email == os.getenv('ADMIN_EMAIL', 'deploypilotai@gmail.com'):
+            return True
         current_count = Project.query.filter_by(user_id=self.id).count()
         return current_count < self.get_plan_limit('projects')
 
     def is_plan_active(self):
-        """Check if paid plan/trial is still active."""
+        """Check if paid plan/trial is still active. Admin always has full access."""
+        if self.email == os.getenv('ADMIN_EMAIL', 'deploypilotai@gmail.com'):
+            return True
         if self.plan == 'free':
             return False
         if not self.plan_expires_at:
