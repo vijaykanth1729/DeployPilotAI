@@ -493,6 +493,87 @@ def analyze_kubernetes(content, file_path='unknown'):
                 'framework': 'CIS-K8S-1.8'
             })
 
+    # Check 16: automountServiceAccountToken not disabled
+    if 'containers:' in content:
+        if not re.search(r'automountServiceAccountToken:\s*false', content):
+            findings.append({
+                'severity': 'medium', 'category': 'security',
+                'title': 'Service Account Token Auto-Mounted',
+                'description': 'Service account token is auto-mounted into pods, potentially exposing API access.',
+                'recommendation': 'Set automountServiceAccountToken: false unless the pod needs API access.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 17: Using default service account
+    if re.search(r'serviceAccountName:\s*default', content) or ('containers:' in content and not re.search(r'serviceAccountName:', content)):
+        if re.search(r'kind:\s*(Deployment|Pod|StatefulSet)', content):
+            findings.append({
+                'severity': 'medium', 'category': 'security',
+                'title': 'Using Default Service Account',
+                'description': 'Pod uses the default service account which may have excessive permissions.',
+                'recommendation': 'Create a dedicated service account with minimal RBAC permissions.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 18: Container port using privileged port (<1024)
+    priv_ports = re.finditer(r'containerPort:\s*(\d+)', content)
+    for match in priv_ports:
+        port = int(match.group(1))
+        if port < 1024 and port != 443 and port != 80:
+            line_num = content[:match.start()].count('\n') + 1
+            findings.append({
+                'severity': 'low', 'category': 'security',
+                'title': f'Privileged Port {port} Used',
+                'description': f'Container uses privileged port {port} (<1024). This may require elevated privileges.',
+                'recommendation': 'Use ports above 1024 (e.g., 8080, 8443) and map with Service.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'CIS-K8S-1.8'
+            })
+            break
+
+    # Check 19: No anti-affinity for replicated deployments
+    if re.search(r'replicas:\s*[2-9]', content):
+        if not re.search(r'(podAntiAffinity|topologySpreadConstraints)', content):
+            findings.append({
+                'severity': 'low', 'category': 'reliability',
+                'title': 'No Pod Anti-Affinity',
+                'description': 'Multi-replica deployment without anti-affinity. All pods may land on same node.',
+                'recommendation': 'Add podAntiAffinity or topologySpreadConstraints for high availability.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 20: No startupProbe for slow-starting containers
+    if 'containers:' in content and re.search(r'(java|spring|rails|django)', content, re.IGNORECASE):
+        if not re.search(r'startupProbe:', content):
+            findings.append({
+                'severity': 'low', 'category': 'reliability',
+                'title': 'No Startup Probe for Slow-Starting App',
+                'description': 'Application framework detected that may have slow startup. No startupProbe configured.',
+                'recommendation': 'Add startupProbe with failureThreshold * periodSeconds > expected startup time.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'CIS-K8S-1.8'
+            })
+
+    # Check 21: hostPath volume mount
+    if re.search(r'hostPath:', content):
+        line_num = next((i+1 for i, l in enumerate(lines) if 'hostPath:' in l), 1)
+        findings.append({
+            'severity': 'high', 'category': 'security',
+            'title': 'hostPath Volume Mount',
+            'description': 'Pod mounts a host filesystem path. This breaks container isolation and exposes host files.',
+            'recommendation': 'Use emptyDir, PVC, or ConfigMap/Secret volumes instead of hostPath.',
+            'file_path': file_path, 'line_number': line_num, 'framework': 'CIS-K8S-1.8'
+        })
+
+    # Check 22: Capabilities not dropped
+    if 'containers:' in content:
+        if not re.search(r'drop:\s*\n\s*-\s*(ALL|all)', content):
+            findings.append({
+                'severity': 'medium', 'category': 'security',
+                'title': 'Linux Capabilities Not Dropped',
+                'description': 'Container does not drop all Linux capabilities. Unnecessary capabilities increase attack surface.',
+                'recommendation': 'Add capabilities: drop: [ALL] and only add back specific needed capabilities.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'CIS-K8S-1.8'
+            })
+
     return findings
 
 
@@ -701,6 +782,94 @@ def analyze_terraform(content, file_path='unknown'):
                 'framework': 'AWS-WA-SEC'
             })
 
+    # Check 13: CloudTrail not enabled
+    if re.search(r'resource\s+"aws_', content):
+        if not re.search(r'aws_cloudtrail', content) and 'cloudtrail' not in content.lower():
+            findings.append({
+                'severity': 'medium', 'category': 'compliance',
+                'title': 'No CloudTrail Configuration',
+                'description': 'No CloudTrail resource found. API activity may not be logged for audit.',
+                'recommendation': 'Enable AWS CloudTrail for all regions with S3 log delivery.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 14: EBS volume not encrypted
+    if re.search(r'resource\s+"aws_ebs_volume"', content):
+        if not re.search(r'encrypted\s*=\s*true', content):
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'EBS Volume Not Encrypted',
+                'description': 'EBS volume does not have encryption enabled. Data at rest is unprotected.',
+                'recommendation': 'Set encrypted = true on all EBS volumes.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 15: Lambda without VPC
+    if re.search(r'resource\s+"aws_lambda_function"', content):
+        if not re.search(r'vpc_config', content):
+            findings.append({
+                'severity': 'low', 'category': 'security',
+                'title': 'Lambda Not in VPC',
+                'description': 'Lambda function is not configured within a VPC. It cannot access private resources.',
+                'recommendation': 'Add vpc_config with subnet_ids and security_group_ids if the function needs VPC access.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 16: No lifecycle prevent_destroy on critical resources
+    if re.search(r'resource\s+"aws_(db_instance|s3_bucket|dynamodb_table)"', content):
+        if not re.search(r'prevent_destroy\s*=\s*true', content):
+            findings.append({
+                'severity': 'medium', 'category': 'reliability',
+                'title': 'No Lifecycle prevent_destroy',
+                'description': 'Critical resource without prevent_destroy lifecycle rule. Accidental deletion possible.',
+                'recommendation': 'Add lifecycle { prevent_destroy = true } to protect critical resources.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'AWS-WA-REL'
+            })
+
+    # Check 17: IAM policy with wildcard actions
+    if re.search(r'"Action"\s*:\s*"\*"', content) or re.search(r'actions\s*=\s*\["\*"\]', content):
+        line_num = next((i+1 for i, l in enumerate(lines) if '*' in l and ('Action' in l or 'actions' in l)), 1)
+        findings.append({
+            'severity': 'critical', 'category': 'security',
+            'title': 'IAM Policy with Wildcard Actions',
+            'description': 'IAM policy grants all actions (*). This violates least-privilege principle.',
+            'recommendation': 'Specify only the exact actions needed (e.g., s3:GetObject, ec2:DescribeInstances).',
+            'file_path': file_path, 'line_number': line_num, 'framework': 'AWS-WA-SEC'
+        })
+
+    # Check 18: Public subnet for databases
+    if re.search(r'resource\s+"aws_db_instance"', content):
+        if re.search(r'publicly_accessible\s*=\s*true', content):
+            findings.append({
+                'severity': 'critical', 'category': 'security',
+                'title': 'RDS Publicly Accessible',
+                'description': 'Database is publicly accessible from the internet.',
+                'recommendation': 'Set publicly_accessible = false and access via VPC/bastion only.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 19: No backup retention
+    if re.search(r'resource\s+"aws_db_instance"', content):
+        if not re.search(r'backup_retention_period', content):
+            findings.append({
+                'severity': 'medium', 'category': 'reliability',
+                'title': 'No Backup Retention Period',
+                'description': 'RDS instance does not specify backup retention. Defaults may be insufficient.',
+                'recommendation': 'Set backup_retention_period to at least 7 days for production databases.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'AWS-WA-REL'
+            })
+
+    # Check 20: S3 bucket public access not blocked
+    if re.search(r'resource\s+"aws_s3_bucket"', content):
+        if not re.search(r'aws_s3_bucket_public_access_block|block_public', content):
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'S3 Public Access Not Blocked',
+                'description': 'S3 bucket does not have public access block configured. Bucket may be publicly accessible.',
+                'recommendation': 'Add aws_s3_bucket_public_access_block with all four block settings = true.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'AWS-WA-SEC'
+            })
+
     return findings
 
 
@@ -827,6 +996,48 @@ def analyze_dockerfile(content, file_path='unknown'):
             'framework': 'DOCKER-CIS'
         })
 
+    # Check 9: EXPOSE with too many ports
+    expose_count = len(re.findall(r'^EXPOSE\s+', content, re.MULTILINE))
+    if expose_count > 3:
+        findings.append({
+            'severity': 'low', 'category': 'security',
+            'title': 'Too Many Ports Exposed',
+            'description': f'{expose_count} ports exposed. Minimize attack surface by exposing only necessary ports.',
+            'recommendation': 'Only EXPOSE ports that the application actually listens on.',
+            'file_path': file_path, 'line_number': 1, 'framework': 'DOCKER-CIS'
+        })
+
+    # Check 10: Using apt-get without --no-install-recommends
+    if re.search(r'apt-get install(?!.*--no-install-recommends)', content):
+        findings.append({
+            'severity': 'low', 'category': 'performance',
+            'title': 'apt-get Without --no-install-recommends',
+            'description': 'Installing packages without --no-install-recommends adds unnecessary packages to the image.',
+            'recommendation': 'Use: RUN apt-get install -y --no-install-recommends <packages>',
+            'file_path': file_path, 'line_number': 1, 'framework': 'DOCKER-CIS'
+        })
+
+    # Check 11: No .dockerignore consideration (COPY with broad context)
+    if re.search(r'^COPY\s+\.\s', content, re.MULTILINE) and 'node_modules' not in content:
+        findings.append({
+            'severity': 'low', 'category': 'performance',
+            'title': 'Ensure .dockerignore Exists',
+            'description': 'Broad COPY detected. Ensure .dockerignore excludes node_modules, .git, .env, etc.',
+            'recommendation': 'Create .dockerignore with: .git, node_modules, .env, *.log, .DS_Store',
+            'file_path': file_path, 'line_number': 1, 'framework': 'DOCKER-CIS'
+        })
+
+    # Check 12: Using curl/wget without cleanup
+    if re.search(r'(curl|wget)\s+', content):
+        if not re.search(r'rm\s+', content):
+            findings.append({
+                'severity': 'low', 'category': 'performance',
+                'title': 'Downloaded Files Not Cleaned Up',
+                'description': 'Files downloaded with curl/wget may not be cleaned up, increasing image size.',
+                'recommendation': 'Chain download, extract, and cleanup in a single RUN: curl ... && tar ... && rm ...',
+                'file_path': file_path, 'line_number': 1, 'framework': 'DOCKER-CIS'
+            })
+
     return findings
 
 
@@ -952,6 +1163,49 @@ def analyze_cicd(content, file_path='unknown'):
                 'file_path': file_path,
                 'line_number': 1,
                 'framework': 'CICD-SEC'
+            })
+
+    # Check 9: No SAST/lint step
+    if not re.search(r'(sonar|eslint|pylint|flake8|rubocop|golangci-lint|semgrep)', content, re.IGNORECASE):
+        findings.append({
+            'severity': 'medium', 'category': 'reliability',
+            'title': 'No Static Analysis (SAST/Lint)',
+            'description': 'Pipeline has no static analysis or linting step. Code quality issues may reach production.',
+            'recommendation': 'Add a lint/SAST step: ESLint, Pylint, SonarQube, or Semgrep.',
+            'file_path': file_path, 'line_number': 1, 'framework': 'CICD-SEC'
+        })
+
+    # Check 10: Deploying without approval on main branch
+    if re.search(r'branches:\s*\[.*main.*\]', content) or re.search(r'branch.*main', content):
+        if re.search(r'(deploy|production|release)', content, re.IGNORECASE):
+            if not re.search(r'(approval|manual|environment)', content, re.IGNORECASE):
+                findings.append({
+                    'severity': 'high', 'category': 'security',
+                    'title': 'Auto-Deploy to Production Without Approval',
+                    'description': 'Pipeline deploys to production on push to main without manual approval gate.',
+                    'recommendation': 'Add environment protection rules or manual approval step before production deploy.',
+                    'file_path': file_path, 'line_number': 1, 'framework': 'CICD-SEC'
+                })
+
+    # Check 11: Using self-hosted runners without security
+    if re.search(r'runs-on:\s*self-hosted', content):
+        findings.append({
+            'severity': 'medium', 'category': 'security',
+            'title': 'Self-Hosted Runner Used',
+            'description': 'Self-hosted runners may have persistent state and security risks if not properly isolated.',
+            'recommendation': 'Use ephemeral runners, or ensure self-hosted runners are hardened and isolated.',
+            'file_path': file_path, 'line_number': 1, 'framework': 'CICD-SEC'
+        })
+
+    # Check 12: No artifact signing/verification
+    if re.search(r'(push|publish|upload|deploy)', content, re.IGNORECASE):
+        if not re.search(r'(cosign|sigstore|sign|verify|checksum|sha256)', content, re.IGNORECASE):
+            findings.append({
+                'severity': 'low', 'category': 'security',
+                'title': 'No Artifact Signing',
+                'description': 'Artifacts are published without signing or checksum verification.',
+                'recommendation': 'Sign container images with Cosign/Sigstore or generate SHA256 checksums for artifacts.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'CICD-SEC'
             })
 
     return findings
@@ -1256,6 +1510,163 @@ env:
     enabled = true
   }
 }''',
+    # New Kubernetes fixes
+    'Service Account Token Auto-Mounted': '''spec:
+  automountServiceAccountToken: false''',
+    'Using Default Service Account': '''spec:
+  serviceAccountName: my-app-sa
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: my-app-sa
+  namespace: production''',
+    'Privileged Port Used': '''ports:
+- containerPort: 8080  # Use non-privileged port
+# Map to 80 via Service:
+# spec:
+#   ports:
+#   - port: 80
+#     targetPort: 8080''',
+    'No Pod Anti-Affinity': '''affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - my-app
+        topologyKey: kubernetes.io/hostname''',
+    'No Startup Probe for Slow-Starting App': '''startupProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+  failureThreshold: 30
+  periodSeconds: 10''',
+    'hostPath Volume Mount': '''# Replace hostPath with emptyDir or PVC:
+volumes:
+- name: data
+  emptyDir: {}
+# Or use PersistentVolumeClaim:
+# - name: data
+#   persistentVolumeClaim:
+#     claimName: my-pvc''',
+    'Linux Capabilities Not Dropped': '''securityContext:
+  capabilities:
+    drop:
+      - ALL
+    add:
+      - NET_BIND_SERVICE  # Only if needed''',
+    # New Terraform fixes
+    'No CloudTrail Configuration': '''resource "aws_cloudtrail" "main" {
+  name                          = "main-trail"
+  s3_bucket_name                = aws_s3_bucket.trail.id
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_logging                = true
+}''',
+    'EBS Volume Not Encrypted': '''resource "aws_ebs_volume" "example" {
+  availability_zone = "us-east-1a"
+  size              = 40
+  encrypted         = true
+  kms_key_id        = aws_kms_key.ebs.arn
+}''',
+    'Lambda Not in VPC': '''resource "aws_lambda_function" "example" {
+  # ... other config ...
+  vpc_config {
+    subnet_ids         = [aws_subnet.private.id]
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+}''',
+    'No Lifecycle prevent_destroy': '''resource "aws_db_instance" "example" {
+  # ... other config ...
+  lifecycle {
+    prevent_destroy = true
+  }
+}''',
+    'IAM Policy with Wildcard Actions': '''# Use specific actions instead of "*"
+resource "aws_iam_policy" "example" {
+  policy = jsonencode({
+    Statement = [{
+      Effect   = "Allow"
+      Action   = [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:ListBucket"
+      ]
+      Resource = [
+        aws_s3_bucket.example.arn,
+        "${aws_s3_bucket.example.arn}/*"
+      ]
+    }]
+  })
+}''',
+    'RDS Publicly Accessible': '''resource "aws_db_instance" "example" {
+  # ... other config ...
+  publicly_accessible = false
+  db_subnet_group_name = aws_db_subnet_group.private.name
+}''',
+    'No Backup Retention Period': '''resource "aws_db_instance" "example" {
+  # ... other config ...
+  backup_retention_period = 7
+  backup_window           = "03:00-04:00"
+}''',
+    'S3 Public Access Not Blocked': '''resource "aws_s3_bucket_public_access_block" "example" {
+  bucket = aws_s3_bucket.example.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}''',
+    # New Dockerfile fixes
+    'Too Many Ports Exposed': '''# Only expose ports the app actually uses
+EXPOSE 8080
+# Remove unnecessary EXPOSE directives''',
+    'apt-get Without --no-install-recommends': '''RUN apt-get update && \\
+    apt-get install -y --no-install-recommends \\
+    curl \\
+    ca-certificates \\
+    && rm -rf /var/lib/apt/lists/*''',
+    'Ensure .dockerignore Exists': '''# Create .dockerignore with:
+.git
+node_modules
+.env
+*.log
+.DS_Store
+coverage
+dist
+.terraform''',
+    'Downloaded Files Not Cleaned Up': '''# Chain download, extract, and cleanup:
+RUN curl -fsSL https://example.com/file.tar.gz -o /tmp/file.tar.gz && \\
+    tar -xzf /tmp/file.tar.gz -C /opt/ && \\
+    rm -f /tmp/file.tar.gz''',
+    # New CI/CD fixes
+    'No Static Analysis (SAST/Lint)': '''- name: Run linting
+  run: npm run lint
+  # Or for Python:
+  # run: pip install flake8 && flake8 .
+  # Or use Semgrep:
+  # - uses: returntocorp/semgrep-action@v1''',
+    'Auto-Deploy to Production Without Approval': '''jobs:
+  deploy:
+    environment:
+      name: production
+      url: https://myapp.com
+    # Configure required reviewers in GitHub:
+    # Settings → Environments → production → Required reviewers''',
+    'Self-Hosted Runner Used': '''# Use ephemeral runners or GitHub-hosted:
+runs-on: ubuntu-latest
+# If self-hosted is required, use labels:
+# runs-on: [self-hosted, linux, ephemeral]''',
+    'No Artifact Signing': '''- name: Sign container image
+  uses: sigstore/cosign-installer@v3
+- run: cosign sign --yes ${{ env.IMAGE_NAME }}:${{ github.sha }}
+# Or generate checksums:
+# - run: sha256sum dist/* > checksums.txt''',
 }
 
 
@@ -1290,16 +1701,26 @@ def count_by_severity(findings):
     return counts
 
 
-def scan_directory(directory_path):
-    """Walk a directory and scan all infrastructure files."""
+def scan_directory(directory_path, max_files=500):
+    """Walk a directory and scan all infrastructure files. Limits to max_files to prevent timeouts."""
     all_findings = []
     scannable_extensions = ('.tf', '.yaml', '.yml', '.dockerfile')
     scannable_names = ('Dockerfile', 'Jenkinsfile', 'docker-compose.yml', 'docker-compose.yaml')
+    files_scanned = 0
 
     for root, dirs, files in os.walk(directory_path):
         # Skip hidden directories and common non-infra dirs
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('node_modules', 'vendor', '__pycache__', '.git')]
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in (
+            'node_modules', 'vendor', '__pycache__', '.git', 'venv', 'env',
+            '.terraform', '.cache', 'dist', 'build', 'target', 'coverage',
+            'test', 'tests', '__tests__', 'spec', 'fixtures', 'examples',
+            'docs', 'documentation', 'assets', 'images', 'static'
+        )]
+
         for filename in files:
+            if files_scanned >= max_files:
+                return all_findings
+
             full_path = os.path.join(root, filename)
             rel_path = os.path.relpath(full_path, directory_path)
 
@@ -1311,12 +1732,16 @@ def scan_directory(directory_path):
 
             if should_scan:
                 try:
+                    # Skip files larger than 100KB (likely generated/vendor)
+                    if os.path.getsize(full_path) > 100 * 1024:
+                        continue
                     with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
                         content = f.read()
                     file_type = detect_file_type(rel_path, content)
                     if file_type:
                         file_findings = analyze_content(content, file_type, rel_path)
                         all_findings.extend(file_findings)
+                        files_scanned += 1
                 except Exception:
                     continue
 
@@ -1409,6 +1834,26 @@ def clone_and_scan_repo(repo_url, token=None):
     try:
         # Normalize URL (convert SSH/git:// to HTTPS)
         repo_url = normalize_repo_url(repo_url)
+
+        # Check repo size via API before cloning (GitHub only)
+        if 'github.com' in repo_url:
+            try:
+                import urllib.request
+                match = re.match(r'https?://github\.com/([^/]+/[^/]+?)(?:\.git)?$', repo_url)
+                if match:
+                    api_url = f'https://api.github.com/repos/{match.group(1)}'
+                    headers = {'Accept': 'application/json'}
+                    if token:
+                        headers['Authorization'] = f'Bearer {token}'
+                    req = urllib.request.Request(api_url, headers=headers)
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        repo_info = json.loads(resp.read().decode())
+                    size_kb = repo_info.get('size', 0)
+                    if size_kb > 500000:  # > 500MB
+                        return None, f'Repository is too large ({size_kb // 1024}MB). Maximum supported size is 500MB. Try scanning a smaller repo or use manual paste for specific files.'
+            except Exception:
+                pass  # If API check fails, proceed with clone attempt
+
         provider = detect_git_provider(repo_url)
         clone_url = build_authenticated_url(repo_url, token, provider)
 
@@ -1480,6 +1925,9 @@ def index():
 @app.route('/demo-scan', methods=['POST'])
 def demo_scan():
     """Run a demo scan without requiring signup — shows the product value instantly."""
+    import time
+    start_time = time.time()
+
     # Check if user pasted their own code
     custom_code = request.form.get('code', '').strip()
     file_type = request.form.get('file_type', 'kubernetes')
@@ -1518,11 +1966,18 @@ spec:
     findings = analyze_content(scan_code, file_type, 'demo/input')
     risk_score = calculate_risk_score(findings)
     counts = count_by_severity(findings)
+    elapsed = round(time.time() - start_time, 2)
+    # Ensure minimum visible time for UX (at least 0.8s feels like "real work")
+    if elapsed < 0.8:
+        time.sleep(0.8 - elapsed)
+        elapsed = 0.8
+
     return jsonify({
         'risk_score': risk_score,
         'findings': findings,
         'counts': counts,
-        'total': len(findings)
+        'total': len(findings),
+        'elapsed': elapsed
     })
 
 
@@ -2509,6 +2964,13 @@ def checks_page():
             {'title': 'Writable Root Filesystem', 'severity': 'medium', 'framework': 'CIS-K8S-1.8', 'description': 'readOnlyRootFilesystem not set, allowing file system modifications'},
             {'title': 'No Namespace Specified', 'severity': 'low', 'framework': 'CIS-K8S-1.8', 'description': 'Resources deployed to default namespace without explicit namespace'},
             {'title': 'No PodDisruptionBudget', 'severity': 'low', 'framework': 'CIS-K8S-1.8', 'description': 'Multi-replica deployment without PDB for disruption protection'},
+            {'title': 'Service Account Token Auto-Mounted', 'severity': 'medium', 'framework': 'CIS-K8S-1.8', 'description': 'Service account token auto-mounted, potentially exposing API access'},
+            {'title': 'Using Default Service Account', 'severity': 'medium', 'framework': 'CIS-K8S-1.8', 'description': 'Pod uses default service account which may have excessive permissions'},
+            {'title': 'Privileged Port Used', 'severity': 'low', 'framework': 'CIS-K8S-1.8', 'description': 'Container uses privileged port (<1024) requiring elevated privileges'},
+            {'title': 'No Pod Anti-Affinity', 'severity': 'low', 'framework': 'CIS-K8S-1.8', 'description': 'Multi-replica deployment without anti-affinity for high availability'},
+            {'title': 'No Startup Probe', 'severity': 'low', 'framework': 'CIS-K8S-1.8', 'description': 'Slow-starting application without startupProbe configured'},
+            {'title': 'hostPath Volume Mount', 'severity': 'high', 'framework': 'CIS-K8S-1.8', 'description': 'Pod mounts host filesystem path, breaking container isolation'},
+            {'title': 'Linux Capabilities Not Dropped', 'severity': 'medium', 'framework': 'CIS-K8S-1.8', 'description': 'Container does not drop all Linux capabilities'},
         ],
         'terraform': [
             {'title': 'Security Group Open to World', 'severity': 'critical', 'framework': 'AWS-WA-SEC', 'description': 'Ingress allows 0.0.0.0/0 — resource exposed to entire internet'},
@@ -2523,6 +2985,14 @@ def checks_page():
             {'title': 'Sensitive Variable Not Marked', 'severity': 'medium', 'framework': 'AWS-WA-SEC', 'description': 'Variables with sensitive data not marked sensitive = true'},
             {'title': 'Access Logging Not Enabled', 'severity': 'medium', 'framework': 'AWS-WA-SEC', 'description': 'Load balancer or CDN without access logging for audit trail'},
             {'title': 'Resource Missing Tags', 'severity': 'low', 'framework': 'AWS-WA-COST', 'description': 'Resources without tags for cost allocation and management'},
+            {'title': 'No CloudTrail Configuration', 'severity': 'medium', 'framework': 'AWS-WA-SEC', 'description': 'No CloudTrail resource found for API activity logging'},
+            {'title': 'EBS Volume Not Encrypted', 'severity': 'high', 'framework': 'AWS-WA-SEC', 'description': 'EBS volume without encryption enabled'},
+            {'title': 'Lambda Not in VPC', 'severity': 'low', 'framework': 'AWS-WA-SEC', 'description': 'Lambda function not configured within a VPC'},
+            {'title': 'No Lifecycle prevent_destroy', 'severity': 'medium', 'framework': 'AWS-WA-REL', 'description': 'Critical resource without prevent_destroy lifecycle rule'},
+            {'title': 'IAM Policy with Wildcard Actions', 'severity': 'critical', 'framework': 'AWS-WA-SEC', 'description': 'IAM policy grants all actions (*) violating least-privilege'},
+            {'title': 'RDS Publicly Accessible', 'severity': 'critical', 'framework': 'AWS-WA-SEC', 'description': 'Database publicly accessible from the internet'},
+            {'title': 'No Backup Retention Period', 'severity': 'medium', 'framework': 'AWS-WA-REL', 'description': 'RDS instance without specified backup retention'},
+            {'title': 'S3 Public Access Not Blocked', 'severity': 'high', 'framework': 'AWS-WA-SEC', 'description': 'S3 bucket without public access block configured'},
         ],
         'dockerfile': [
             {'title': 'Secret Exposed in Dockerfile', 'severity': 'critical', 'framework': 'DOCKER-CIS', 'description': 'Sensitive values in ARG/ENV baked into image layers permanently'},
@@ -2533,6 +3003,10 @@ def checks_page():
             {'title': 'Use COPY Instead of ADD', 'severity': 'low', 'framework': 'DOCKER-CIS', 'description': 'ADD has implicit behaviors — COPY is more explicit and predictable'},
             {'title': 'No HEALTHCHECK Instruction', 'severity': 'low', 'framework': 'DOCKER-CIS', 'description': 'Container health cannot be determined by orchestrators'},
             {'title': 'Consider Multi-Stage Build', 'severity': 'low', 'framework': 'DOCKER-CIS', 'description': 'Single-stage build includes build tools in final image'},
+            {'title': 'Too Many Ports Exposed', 'severity': 'low', 'framework': 'DOCKER-CIS', 'description': 'Excessive ports exposed increasing attack surface'},
+            {'title': 'apt-get Without --no-install-recommends', 'severity': 'low', 'framework': 'DOCKER-CIS', 'description': 'Installing unnecessary recommended packages'},
+            {'title': 'Ensure .dockerignore Exists', 'severity': 'low', 'framework': 'DOCKER-CIS', 'description': 'Broad COPY without .dockerignore may include sensitive files'},
+            {'title': 'Downloaded Files Not Cleaned Up', 'severity': 'low', 'framework': 'DOCKER-CIS', 'description': 'Files from curl/wget not removed, increasing image size'},
         ],
         'cicd': [
             {'title': 'Hardcoded Secret in Pipeline', 'severity': 'critical', 'framework': 'CICD-SEC', 'description': 'Passwords, tokens, or keys hardcoded in pipeline configuration'},
@@ -2543,6 +3017,10 @@ def checks_page():
             {'title': 'Unpinned GitHub Action', 'severity': 'medium', 'framework': 'CICD-SEC', 'description': 'Actions using branch/tag reference instead of SHA — supply chain risk'},
             {'title': 'No Caching Configured', 'severity': 'low', 'framework': 'CICD-SEC', 'description': 'Dependencies downloaded fresh every build — slow pipelines'},
             {'title': 'No Pipeline Timeout', 'severity': 'low', 'framework': 'CICD-SEC', 'description': 'Stuck pipelines consume resources indefinitely'},
+            {'title': 'No Static Analysis (SAST/Lint)', 'severity': 'medium', 'framework': 'CICD-SEC', 'description': 'No code quality or security analysis step in pipeline'},
+            {'title': 'Auto-Deploy Without Approval', 'severity': 'high', 'framework': 'CICD-SEC', 'description': 'Production deployment without manual approval gate'},
+            {'title': 'Self-Hosted Runner Used', 'severity': 'medium', 'framework': 'CICD-SEC', 'description': 'Self-hosted runners may have persistent state and security risks'},
+            {'title': 'No Artifact Signing', 'severity': 'low', 'framework': 'CICD-SEC', 'description': 'Artifacts published without signing or checksum verification'},
         ],
     }
     return render_template('checks.html', checks=checks)

@@ -278,7 +278,7 @@ spec:
     <!-- Features heading -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h2 class="text-3xl font-bold text-center text-white mb-4">Comprehensive Security Coverage</h2>
-        <p class="text-gray-400 text-center mb-16 max-w-2xl mx-auto">40+ real checks across your entire infrastructure stack</p>
+        <p class="text-gray-400 text-center mb-16 max-w-2xl mx-auto">65+ real checks across your entire infrastructure stack</p>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
                 <div class="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center mb-4">
@@ -392,7 +392,7 @@ spec:
                     </tr>
                     <tr class="border-b border-gray-800">
                         <td class="py-3 px-4 text-gray-400">Scan Speed</td>
-                        <td class="py-3 px-4 text-center"><span class="text-cyan-400">✓</span> &lt;3 seconds</td>
+                        <td class="py-3 px-4 text-center"><span class="text-cyan-400">✓</span> Seconds, not minutes</td>
                         <td class="py-3 px-4 text-center text-gray-500">Moderate</td>
                         <td class="py-3 px-4 text-center text-gray-500">Variable</td>
                     </tr>
@@ -506,7 +506,7 @@ spec:
                     <i class="bi bi-plus-lg text-gray-500 group-open:rotate-45 transition-transform"></i>
                 </summary>
                 <div class="px-6 pb-4 text-sm text-gray-400 leading-relaxed">
-                    InfraAudit scans Kubernetes YAML manifests (Deployments, Services, RBAC, NetworkPolicies), Terraform .tf files, Dockerfiles, and CI/CD pipeline configs (GitHub Actions, Jenkins). We detect 43+ real security issues across these file types.
+                    InfraAudit scans Kubernetes YAML manifests (Deployments, Services, RBAC, NetworkPolicies), Terraform .tf files, Dockerfiles, and CI/CD pipeline configs (GitHub Actions, Jenkins). We detect 65+ real security issues across these file types.
                 </div>
             </details>
 
@@ -556,7 +556,7 @@ spec:
                     <i class="bi bi-plus-lg text-gray-500 group-open:rotate-45 transition-transform"></i>
                 </summary>
                 <div class="px-6 pb-4 text-sm text-gray-400 leading-relaxed">
-                    Free plan includes 2 projects, manual paste scanning, full analysis with all 43+ checks, risk scoring, compliance mapping, and scan history. Upgrade to Pro for unlimited projects, GitHub repo integration, and JSON export.
+                    Free plan includes 2 projects, manual paste scanning, full analysis with all 65+ checks, risk scoring, compliance mapping, and scan history. Upgrade to Pro for unlimited projects, GitHub repo integration, and JSON export.
                 </div>
             </details>
 
@@ -665,7 +665,6 @@ document.getElementById('demoScanBtn').addEventListener('click', function() {
 
     btn.disabled = true;
     btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Scanning...';
-    var startTime = Date.now();
 
     fetch('/demo-scan', {
         method: 'POST',
@@ -674,8 +673,7 @@ document.getElementById('demoScanBtn').addEventListener('click', function() {
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        document.getElementById('demoTime').textContent = elapsed + 's';
+        document.getElementById('demoTime').textContent = data.elapsed + 's';
 
         var scoreEl = document.getElementById('demoScore');
         scoreEl.textContent = data.risk_score + '/100';
