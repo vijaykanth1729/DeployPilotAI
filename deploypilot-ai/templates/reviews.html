@@ -101,10 +101,10 @@
             <div class="flex items-start justify-between mb-3">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                        {{ review.user.name[0]|upper }}
+                        {{ review.reviewer_name[0]|upper }}
                     </div>
                     <div>
-                        <div class="text-white font-medium text-sm">{{ review.user.name }}</div>
+                        <div class="text-white font-medium text-sm">{{ review.reviewer_name }}</div>
                         <div class="text-xs text-gray-500">{{ (review.created_at|ist).strftime('%b %d, %Y') }}</div>
                     </div>
                 </div>

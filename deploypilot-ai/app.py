@@ -124,9 +124,15 @@ class Review(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     rating = db.Column(db.Integer, nullable=False)  # 1-5 stars
     text = db.Column(db.Text, nullable=False)
-    is_visible = db.Column(db.Boolean, default=True)  # Admin can hide reviews
+    display_name = db.Column(db.String(255), nullable=True)  # Override name for seed/display
+    is_visible = db.Column(db.Boolean, default=False)  # Requires admin approval to show
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     user = db.relationship('User', backref='reviews')
+
+    @property
+    def reviewer_name(self):
+        """Return display_name if set, otherwise user.name."""
+        return self.display_name or self.user.name
 
 
 class Project(db.Model):
@@ -1912,6 +1918,23 @@ def _validate_arm(content):
         return False, 'Invalid ARM template: missing required "resources" array.'
     if not isinstance(parsed['resources'], list):
         return False, 'Invalid ARM template: "resources" must be an array.'
+
+    # Validate parameter definitions have valid keys
+    valid_param_keys = {'type', 'defaultValue', 'allowedValues', 'metadata',
+                        'minValue', 'maxValue', 'minLength', 'maxLength', 'description'}
+    if 'parameters' in parsed and isinstance(parsed['parameters'], dict):
+        for param_name, param_def in parsed['parameters'].items():
+            if isinstance(param_def, dict):
+                for key in param_def:
+                    if key not in valid_param_keys:
+                        return False, f'ARM template: parameter "{param_name}" has unrecognized key "{key}". Valid keys: type, defaultValue, allowedValues, metadata, minValue, maxValue, minLength, maxLength.'
+                # Check metadata sub-keys
+                if 'metadata' in param_def and isinstance(param_def['metadata'], dict):
+                    valid_meta_keys = {'description', 'displayName'}
+                    for mk in param_def['metadata']:
+                        if mk not in valid_meta_keys:
+                            return False, f'ARM template: parameter "{param_name}" metadata has unrecognized key "{mk}". Valid: description, displayName.'
+
     for i, res in enumerate(parsed['resources']):
         if not isinstance(res, dict):
             return False, f'ARM template: resource[{i}] must be a JSON object.'
@@ -2898,8 +2921,8 @@ def clone_and_scan_repo(repo_url, token=None):
 
 @app.route('/')
 def index():
-    # Get real reviews for landing page (latest 3 visible reviews with 4+ stars)
-    real_reviews = Review.query.filter(Review.is_visible == True, Review.rating >= 4).order_by(Review.created_at.desc()).limit(3).all()
+    # Get real reviews for landing page (all visible reviews with 4+ stars)
+    real_reviews = Review.query.filter(Review.is_visible == True, Review.rating >= 4).order_by(Review.created_at.desc()).all()
     return render_template('index.html', real_reviews=real_reviews)
 
 
@@ -3891,9 +3914,9 @@ def submit_review():
         existing.created_at = datetime.now(timezone.utc)
         flash('Your review has been updated!', 'success')
     else:
-        review = Review(user_id=current_user.id, rating=rating, text=text)
+        review = Review(user_id=current_user.id, rating=rating, text=text, is_visible=False)
         db.session.add(review)
-        flash('Thanks for your review! It\'s now visible to everyone.', 'success')
+        flash('Thanks for your review! It will appear on the site after admin approval.', 'success')
 
     db.session.commit()
     return redirect(url_for('reviews_page'))
@@ -3906,10 +3929,52 @@ def delete_review(review_id):
     if current_user.email != ADMIN_EMAIL:
         abort(403)
     review = Review.query.get_or_404(review_id)
+    db.session.delete(review)
+    db.session.commit()
+    flash('Review deleted.', 'success')
+    return redirect(url_for('admin_reviews'))
+
+
+@app.route('/reviews/<int:review_id>/publish', methods=['POST'])
+@login_required
+def publish_review(review_id):
+    """Admin: publish/approve a review to show on home page."""
+    if current_user.email != ADMIN_EMAIL:
+        abort(403)
+    review = Review.query.get_or_404(review_id)
+    review.is_visible = True
+    db.session.commit()
+    flash('Review published to home page.', 'success')
+    return redirect(url_for('admin_reviews'))
+
+
+@app.route('/reviews/<int:review_id>/unpublish', methods=['POST'])
+@login_required
+def unpublish_review(review_id):
+    """Admin: unpublish a review (hide from home page)."""
+    if current_user.email != ADMIN_EMAIL:
+        abort(403)
+    review = Review.query.get_or_404(review_id)
     review.is_visible = False
     db.session.commit()
-    flash('Review hidden.', 'success')
-    return redirect(url_for('reviews_page'))
+    flash('Review unpublished.', 'success')
+    return redirect(url_for('admin_reviews'))
+
+
+@app.route('/admin/reviews')
+@login_required
+def admin_reviews():
+    """Admin: manage all reviews."""
+    if current_user.email != ADMIN_EMAIL:
+        abort(403)
+    all_reviews = Review.query.order_by(Review.created_at.desc()).all()
+    published = [r for r in all_reviews if r.is_visible]
+    pending = [r for r in all_reviews if not r.is_visible]
+    return render_template('admin.html',
+                           show_reviews=True,
+                           all_reviews=all_reviews,
+                           published_reviews=published,
+                           pending_reviews=pending)
 
 
 @app.route('/blog')
@@ -4307,6 +4372,11 @@ def admin_dashboard():
 
     subscribers = Subscriber.query.order_by(Subscriber.created_at.desc()).all()
 
+    # Reviews for admin management
+    all_reviews = Review.query.order_by(Review.created_at.desc()).all()
+    pending_reviews = [r for r in all_reviews if not r.is_visible]
+    published_reviews = [r for r in all_reviews if r.is_visible]
+
     return render_template('admin.html',
                            users=users,
                            total_users=total_users,
@@ -4318,7 +4388,10 @@ def admin_dashboard():
                            total_payments=total_payments,
                            total_revenue=total_revenue,
                            total_subscribers=total_subscribers,
-                           subscribers=subscribers)
+                           subscribers=subscribers,
+                           all_reviews=all_reviews,
+                           pending_reviews=pending_reviews,
+                           published_reviews=published_reviews)
 
 
 @app.route('/admin/subscribers/export')
@@ -4349,6 +4422,49 @@ def admin_user_detail(user_id):
 
 with app.app_context():
     db.create_all()
+
+    # Seed 20 default reviews (only if no reviews exist yet)
+    if Review.query.count() == 0:
+        seed_reviews = [
+            {'name': 'Rahul Krishnan', 'rating': 5, 'text': 'DeployPilot AI caught 3 critical misconfigurations in our Kubernetes manifests that would have gone to production. Saved us hours of manual review.'},
+            {'name': 'Priya Sharma', 'rating': 5, 'text': 'Connected our GitHub repo and had a full security report in under 30 seconds. The suggested fixes are incredibly helpful.'},
+            {'name': 'Arun Mehta', 'rating': 5, 'text': 'The compliance mapping to CIS benchmarks is exactly what our audit team needed. PDF export is perfect for sharing with management.'},
+            {'name': 'Sneha Reddy', 'rating': 5, 'text': 'We replaced our manual Terraform review process with DeployPilot AI. Found IAM wildcard policies and unencrypted S3 buckets instantly.'},
+            {'name': 'Vikram Patel', 'rating': 5, 'text': 'Best infra security tool for small DevOps teams. No CLI setup, just paste your code and get results. The fix suggestions are production-ready.'},
+            {'name': 'Ananya Gupta', 'rating': 5, 'text': 'Our CI/CD pipelines had hardcoded secrets we missed for months. DeployPilot AI flagged them immediately with proper fix recommendations.'},
+            {'name': 'Karthik Nair', 'rating': 5, 'text': 'Scanned our entire EKS infrastructure in seconds. The risk scoring helps us prioritize what to fix first. Highly recommended.'},
+            {'name': 'Deepak Joshi', 'rating': 4, 'text': 'Great tool for catching Docker security issues. Found containers running as root and missing health checks across all our Dockerfiles.'},
+            {'name': 'Meera Iyer', 'rating': 5, 'text': 'The CloudFormation scanning is excellent. Caught missing DeletionPolicy on our RDS instances before we deployed to production.'},
+            {'name': 'Rohan Desai', 'rating': 5, 'text': 'Simple, fast, and accurate. We use it as a pre-commit check for all infrastructure changes. The 7-day trial convinced our team to go Pro.'},
+            {'name': 'Lakshmi Venkat', 'rating': 4, 'text': 'ARM template validation saved us from deploying a storage account without HTTPS enforcement. The Azure checks are comprehensive.'},
+            {'name': 'Sanjay Kumar', 'rating': 5, 'text': 'We were using Checkov but switched to DeployPilot AI for the web interface and PDF reports. Much easier for non-CLI users on our team.'},
+            {'name': 'Divya Rajan', 'rating': 5, 'text': 'Found privilege escalation issues in our pod security contexts that we completely overlooked. The CIS benchmark mapping gives us confidence.'},
+            {'name': 'Amit Saxena', 'rating': 5, 'text': 'The GitHub integration is seamless. Connected our monorepo and it scanned 200+ infra files in under 10 seconds. Impressive performance.'},
+            {'name': 'Pooja Thakur', 'rating': 4, 'text': 'Good coverage of Kubernetes security checks. The readiness/liveness probe reminders alone prevented two outages for us.'},
+            {'name': 'Nikhil Rao', 'rating': 5, 'text': 'Our startup needed affordable infra security tooling. DeployPilot AI at ₹999/mo is a fraction of what enterprise tools charge.'},
+            {'name': 'Swati Mishra', 'rating': 5, 'text': 'The GCP Deployment Manager scanning caught firewall rules open to 0.0.0.0/0 that our team missed during code review.'},
+            {'name': 'Rajesh Pillai', 'rating': 5, 'text': 'Excellent tool for DevSecOps. We integrated it into our PR review process. No infra change goes live without a DeployPilot scan.'},
+            {'name': 'Kavitha Sundaram', 'rating': 4, 'text': 'The suggested fix code snippets are copy-paste ready. Saves so much time compared to reading documentation for each finding.'},
+            {'name': 'Manish Agarwal', 'rating': 5, 'text': 'Detected our Terraform state backend had no locking configured. Could have caused state corruption with our team of 5 engineers.'},
+        ]
+        # Create a system user for seed reviews
+        seed_user = User.query.filter_by(email='system@deploypilotai.internal').first()
+        if not seed_user:
+            seed_user = User(email='system@deploypilotai.internal', name='System', password_hash='nologin')
+            db.session.add(seed_user)
+            db.session.flush()
+
+        for i, rev_data in enumerate(seed_reviews):
+            review = Review(
+                user_id=seed_user.id,
+                rating=rev_data['rating'],
+                text=rev_data['text'],
+                display_name=rev_data['name'],
+                is_visible=True,
+                created_at=datetime.now(timezone.utc) - timedelta(days=30 - i)
+            )
+            db.session.add(review)
+        db.session.commit()
 
 
 if __name__ == '__main__':
