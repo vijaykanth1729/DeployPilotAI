@@ -29,7 +29,37 @@
         .gradient-text { background: linear-gradient(135deg, #06b6d4, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         /* Mobile menu animation */
         #mobile-menu { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
-        #mobile-menu.open { max-height: 400px; }
+        #mobile-menu.open { max-height: 500px; }
+        /* Mobile responsive fixes */
+        @media (max-width: 640px) {
+            .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+            pre, code { word-break: break-all; white-space: pre-wrap; font-size: 0.7rem; }
+            table { font-size: 0.72rem; }
+            td, th { padding: 0.4rem 0.3rem; }
+            .text-5xl { font-size: 2.25rem; }
+            .text-4xl { font-size: 1.75rem; }
+            .text-3xl { font-size: 1.4rem; }
+            .font-mono { word-break: break-all; }
+            /* Fix containers overflowing */
+            .max-w-7xl, .max-w-5xl, .max-w-4xl, .max-w-3xl { padding-left: 10px; padding-right: 10px; }
+            /* Fix scan detail cards */
+            .grid.grid-cols-2.sm\:grid-cols-5 { grid-template-columns: repeat(3, 1fr); }
+            /* Fix findings expanding beyond container */
+            details { overflow: hidden; }
+            details summary { padding: 8px 10px !important; font-size: 0.8rem; }
+            details summary span.text-sm { font-size: 0.75rem; }
+            details .px-4, details .px-3 { padding-left: 8px !important; padding-right: 8px !important; }
+            /* Fix dashboard header buttons stacking */
+            .flex.items-center.space-x-3 { flex-wrap: wrap; gap: 6px; }
+            /* Fix project detail table */
+            .lg\:col-span-2, .lg\:col-span-3 { overflow-x: auto; }
+            /* Fix nav logo on small screens */
+            .text-lg.font-extrabold { font-size: 0.95rem; }
+            /* Fix pricing cards */
+            .text-4xl.font-black { font-size: 1.75rem; }
+            /* Ensure body doesn't overflow */
+            body { overflow-x: hidden; }
+        }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col">

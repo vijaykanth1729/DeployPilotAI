@@ -1211,6 +1211,442 @@ def analyze_cicd(content, file_path='unknown'):
     return findings
 
 
+def analyze_cloudformation(content, file_path='unknown'):
+    """Analyze AWS CloudFormation templates (JSON/YAML) for security issues."""
+    findings = []
+    lines = content.split('\n')
+
+    # Check 1: S3 Bucket without encryption
+    if re.search(r'AWS::S3::Bucket', content):
+        if not re.search(r'(BucketEncryption|ServerSideEncryptionConfiguration|SSEAlgorithm)', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'AWS::S3::Bucket' in l), 1)
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'CFN: S3 Bucket Without Encryption',
+                'description': 'S3 bucket does not have server-side encryption configured in CloudFormation template.',
+                'recommendation': 'Add BucketEncryption property with ServerSideEncryptionConfiguration using AES256 or aws:kms.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 2: S3 Bucket public access
+    if re.search(r'AWS::S3::Bucket', content):
+        if not re.search(r'(PublicAccessBlockConfiguration|BlockPublicAcls|BlockPublicPolicy)', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'AWS::S3::Bucket' in l), 1)
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'CFN: S3 Public Access Not Blocked',
+                'description': 'S3 bucket does not have PublicAccessBlockConfiguration to prevent public access.',
+                'recommendation': 'Add PublicAccessBlockConfiguration with all four block settings set to true.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 3: Security Group open to world (0.0.0.0/0)
+    if re.search(r'0\.0\.0\.0/0', content):
+        if re.search(r'AWS::EC2::SecurityGroup', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if '0.0.0.0/0' in l), 1)
+            findings.append({
+                'severity': 'critical', 'category': 'security',
+                'title': 'CFN: Security Group Open to World',
+                'description': 'Security group ingress allows 0.0.0.0/0 — resource exposed to entire internet.',
+                'recommendation': 'Restrict CidrIp to known IP ranges or use security group references.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 4: IAM Policy with wildcard actions
+    if re.search(r'AWS::IAM::(Policy|Role|ManagedPolicy)', content):
+        wildcard_action = re.search(r'["\']Action["\']\s*:\s*["\']?\*["\']?', content) or re.search(r'Action:\s*["\']?\*', content)
+        if wildcard_action:
+            line_num = next((i+1 for i, l in enumerate(lines) if ('Action' in l and '*' in l)), 1)
+            findings.append({
+                'severity': 'critical', 'category': 'security',
+                'title': 'CFN: IAM Policy with Wildcard Actions',
+                'description': 'IAM policy grants all actions (*) violating the principle of least privilege.',
+                'recommendation': 'Replace wildcard with specific actions needed (e.g., s3:GetObject, ec2:DescribeInstances).',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 5: IAM Policy with wildcard resource
+    if re.search(r'AWS::IAM::(Policy|Role|ManagedPolicy)', content):
+        wildcard_resource = re.search(r'["\']Resource["\']\s*:\s*["\']?\*["\']?', content) or re.search(r'Resource:\s*["\']?\*', content)
+        if wildcard_resource:
+            line_num = next((i+1 for i, l in enumerate(lines) if ('Resource' in l and '*' in l)), 1)
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'CFN: IAM Policy with Wildcard Resource',
+                'description': 'IAM policy applies to all resources (*). Should be scoped to specific ARNs.',
+                'recommendation': 'Specify exact resource ARNs instead of using wildcard (*).',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 6: No DeletionPolicy on critical resources
+    critical_resources = ['AWS::RDS::DBInstance', 'AWS::DynamoDB::Table', 'AWS::S3::Bucket', 'AWS::EFS::FileSystem']
+    for res in critical_resources:
+        if re.search(res, content):
+            if not re.search(r'DeletionPolicy:\s*(Retain|Snapshot)', content):
+                line_num = next((i+1 for i, l in enumerate(lines) if res in l), 1)
+                findings.append({
+                    'severity': 'high', 'category': 'reliability',
+                    'title': 'CFN: No DeletionPolicy on Critical Resource',
+                    'description': f'Resource {res.split("::")[-1]} has no DeletionPolicy. Stack deletion will destroy the resource permanently.',
+                    'recommendation': 'Add DeletionPolicy: Retain or DeletionPolicy: Snapshot to prevent accidental data loss.',
+                    'file_path': file_path, 'line_number': line_num, 'framework': 'AWS-WA-REL'
+                })
+                break
+
+    # Check 7: RDS without encryption
+    if re.search(r'AWS::RDS::DBInstance', content):
+        if not re.search(r'StorageEncrypted:\s*(true|True|"true")', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'AWS::RDS::DBInstance' in l), 1)
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'CFN: RDS Without Encryption',
+                'description': 'RDS instance does not have StorageEncrypted enabled. Data at rest is unprotected.',
+                'recommendation': 'Set StorageEncrypted: true and specify KmsKeyId for encryption.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 8: RDS publicly accessible
+    if re.search(r'AWS::RDS::DBInstance', content):
+        if re.search(r'PubliclyAccessible:\s*(true|True|"true")', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'PubliclyAccessible' in l), 1)
+            findings.append({
+                'severity': 'critical', 'category': 'security',
+                'title': 'CFN: RDS Publicly Accessible',
+                'description': 'RDS instance is publicly accessible from the internet.',
+                'recommendation': 'Set PubliclyAccessible: false and place RDS in private subnets.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 9: No logging/monitoring (CloudTrail, CloudWatch)
+    if not re.search(r'AWS::CloudTrail::Trail', content) and not re.search(r'AWS::Logs::LogGroup', content):
+        if re.search(r'AWS::(EC2|Lambda|ECS|RDS)', content):
+            findings.append({
+                'severity': 'medium', 'category': 'security',
+                'title': 'CFN: No Logging Configuration',
+                'description': 'Template creates compute/data resources but has no CloudTrail or CloudWatch Logs configuration.',
+                'recommendation': 'Add AWS::CloudTrail::Trail or AWS::Logs::LogGroup for audit and monitoring.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 10: EBS/EC2 without encryption
+    if re.search(r'AWS::EC2::(Volume|Instance)', content):
+        if not re.search(r'Encrypted:\s*(true|True|"true")', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'AWS::EC2::Volume' in l or 'BlockDeviceMappings' in l), 1)
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'CFN: EBS Volume Not Encrypted',
+                'description': 'EBS volume or EC2 block device mapping does not have encryption enabled.',
+                'recommendation': 'Set Encrypted: true on EBS volumes and block device mappings.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 11: Lambda without VPC config
+    if re.search(r'AWS::Lambda::Function', content):
+        if not re.search(r'VpcConfig', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'AWS::Lambda::Function' in l), 1)
+            findings.append({
+                'severity': 'low', 'category': 'security',
+                'title': 'CFN: Lambda Not in VPC',
+                'description': 'Lambda function is not configured within a VPC, limiting network isolation.',
+                'recommendation': 'Add VpcConfig with SubnetIds and SecurityGroupIds for network isolation.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AWS-WA-SEC'
+            })
+
+    # Check 12: Hardcoded secrets in parameters/resources
+    secret_patterns = re.finditer(r'(Password|Secret|ApiKey|Token|AccessKey)\s*[:=]\s*["\']?[A-Za-z0-9+/=]{8,}', content, re.IGNORECASE)
+    for match in secret_patterns:
+        if not re.search(r'(NoEcho|AWS::SSM|secretsmanager|Ref|!Ref)', content[max(0, match.start()-200):match.end()+100]):
+            line_num = content[:match.start()].count('\n') + 1
+            findings.append({
+                'severity': 'critical', 'category': 'security',
+                'title': 'CFN: Hardcoded Secret Detected',
+                'description': 'Sensitive value appears to be hardcoded instead of using NoEcho parameters or Secrets Manager.',
+                'recommendation': 'Use NoEcho parameters, AWS::SecretsManager::Secret, or SSM Parameter Store for secrets.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AWS-WA-SEC'
+            })
+            break
+
+    return findings
+
+
+def analyze_arm(content, file_path='unknown'):
+    """Analyze Azure ARM templates for security issues."""
+    findings = []
+    lines = content.split('\n')
+
+    # Check 1: Storage account without HTTPS enforcement
+    if re.search(r'Microsoft\.Storage/storageAccounts', content):
+        if not re.search(r'supportsHttpsTrafficOnly.*true', content, re.IGNORECASE):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'Microsoft.Storage/storageAccounts' in l), 1)
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'ARM: Storage Account Without HTTPS Enforcement',
+                'description': 'Storage account does not enforce HTTPS-only traffic, allowing unencrypted connections.',
+                'recommendation': 'Set supportsHttpsTrafficOnly to true in storage account properties.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AZURE-SEC'
+            })
+
+    # Check 2: Storage account without encryption
+    if re.search(r'Microsoft\.Storage/storageAccounts', content):
+        if not re.search(r'encryption', content, re.IGNORECASE):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'Microsoft.Storage/storageAccounts' in l), 1)
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'ARM: Storage Account Without Encryption',
+                'description': 'Storage account does not have explicit encryption configuration.',
+                'recommendation': 'Add encryption block with services (blob, file, table, queue) enabled.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AZURE-SEC'
+            })
+
+    # Check 3: Public IP address assigned
+    if re.search(r'Microsoft\.Network/publicIPAddresses', content):
+        line_num = next((i+1 for i, l in enumerate(lines) if 'publicIPAddresses' in l), 1)
+        findings.append({
+            'severity': 'medium', 'category': 'security',
+            'title': 'ARM: Public IP Address Assigned',
+            'description': 'Resource has a public IP address, increasing attack surface.',
+            'recommendation': 'Use private endpoints, Azure Private Link, or restrict access with NSG rules.',
+            'file_path': file_path, 'line_number': line_num, 'framework': 'AZURE-SEC'
+        })
+
+    # Check 4: No Network Security Group
+    if re.search(r'Microsoft\.Network/(networkInterfaces|virtualNetworks)', content):
+        if not re.search(r'Microsoft\.Network/networkSecurityGroups|networkSecurityGroup', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'Microsoft.Network' in l), 1)
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'ARM: No Network Security Group',
+                'description': 'Network interface or VNet without associated Network Security Group (NSG).',
+                'recommendation': 'Associate an NSG with restrictive inbound/outbound rules.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AZURE-SEC'
+            })
+
+    # Check 5: NSG rule allowing all inbound (0.0.0.0/0 or *)
+    if re.search(r'(sourceAddressPrefix|sourceAddressPrefixes).*(\*|0\.0\.0\.0)', content):
+        if re.search(r'"access"\s*:\s*"Allow"', content, re.IGNORECASE) or re.search(r'access.*Allow', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if '0.0.0.0' in l or ('sourceAddressPrefix' in l and '*' in l)), 1)
+            findings.append({
+                'severity': 'critical', 'category': 'security',
+                'title': 'ARM: NSG Rule Open to World',
+                'description': 'NSG rule allows inbound traffic from any source (0.0.0.0/0 or *). Resource exposed to internet.',
+                'recommendation': 'Restrict sourceAddressPrefix to specific IP ranges or service tags.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AZURE-SEC'
+            })
+
+    # Check 6: No diagnostic settings
+    if re.search(r'Microsoft\.(Compute|Web|Sql|Storage)', content):
+        if not re.search(r'diagnosticSettings|Microsoft\.Insights', content):
+            findings.append({
+                'severity': 'medium', 'category': 'security',
+                'title': 'ARM: No Diagnostic Settings',
+                'description': 'Resources deployed without diagnostic settings for monitoring and audit logging.',
+                'recommendation': 'Add Microsoft.Insights/diagnosticSettings to send logs to Log Analytics or Storage.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'AZURE-SEC'
+            })
+
+    # Check 7: SQL Server without auditing
+    if re.search(r'Microsoft\.Sql/servers', content):
+        if not re.search(r'auditingSettings|auditActionsAndGroups', content, re.IGNORECASE):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'Microsoft.Sql/servers' in l), 1)
+            findings.append({
+                'severity': 'medium', 'category': 'security',
+                'title': 'ARM: SQL Server Without Auditing',
+                'description': 'Azure SQL Server does not have auditing configured for security monitoring.',
+                'recommendation': 'Enable auditing with Microsoft.Sql/servers/auditingSettings resource.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AZURE-SEC'
+            })
+
+    # Check 8: SQL Server with public network access
+    if re.search(r'Microsoft\.Sql/servers', content):
+        if re.search(r'publicNetworkAccess.*Enabled', content, re.IGNORECASE):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'publicNetworkAccess' in l), 1)
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'ARM: SQL Server Public Network Access',
+                'description': 'Azure SQL Server has public network access enabled, exposing it to the internet.',
+                'recommendation': 'Set publicNetworkAccess to Disabled and use Private Endpoints.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AZURE-SEC'
+            })
+
+    # Check 9: VM without managed disk encryption
+    if re.search(r'Microsoft\.Compute/virtualMachines', content):
+        if not re.search(r'(diskEncryptionSet|encryptionAtHost|AzureDiskEncryption)', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'Microsoft.Compute/virtualMachines' in l), 1)
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'ARM: VM Without Disk Encryption',
+                'description': 'Virtual machine does not have disk encryption configured.',
+                'recommendation': 'Enable Azure Disk Encryption or use encryptionAtHost for VM disks.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AZURE-SEC'
+            })
+
+    # Check 10: Hardcoded secrets in parameters
+    if re.search(r'(password|secret|key|token)\s*"?\s*:\s*"[^"]{8,}"', content, re.IGNORECASE):
+        if not re.search(r'"type"\s*:\s*"secureString"|secureString|keyVault', content, re.IGNORECASE):
+            line_num = next((i+1 for i, l in enumerate(lines) if re.search(r'(password|secret|key)', l, re.IGNORECASE) and '"' in l), 1)
+            findings.append({
+                'severity': 'critical', 'category': 'security',
+                'title': 'ARM: Hardcoded Secret Detected',
+                'description': 'Sensitive value appears hardcoded instead of using secureString parameters or Key Vault references.',
+                'recommendation': 'Use secureString parameter type or reference Azure Key Vault secrets.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'AZURE-SEC'
+            })
+
+    return findings
+
+
+def analyze_gcp(content, file_path='unknown'):
+    """Analyze GCP infrastructure templates (Deployment Manager YAML/Jinja) for security issues."""
+    findings = []
+    lines = content.split('\n')
+
+    # Check 1: Compute instance with external IP
+    if re.search(r'compute\.v1\.instance|compute\.googleapis\.com', content, re.IGNORECASE):
+        if re.search(r'(accessConfigs|natIP|ONE_TO_ONE_NAT)', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'accessConfigs' in l or 'natIP' in l), 1)
+            findings.append({
+                'severity': 'medium', 'category': 'security',
+                'title': 'GCP: Instance with External IP',
+                'description': 'Compute instance has an external IP assigned, exposing it to the internet.',
+                'recommendation': 'Remove accessConfigs/natIP and use Cloud NAT or IAP for external access.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'GCP-SEC'
+            })
+
+    # Check 2: Firewall rule open to 0.0.0.0/0
+    if re.search(r'compute\.v1\.firewall|compute\.googleapis\.com.*firewall', content, re.IGNORECASE):
+        if re.search(r'0\.0\.0\.0/0', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if '0.0.0.0/0' in l), 1)
+            findings.append({
+                'severity': 'critical', 'category': 'security',
+                'title': 'GCP: Firewall Rule Open to World',
+                'description': 'Firewall rule allows ingress from 0.0.0.0/0 — resource exposed to entire internet.',
+                'recommendation': 'Restrict sourceRanges to specific IP ranges or use service accounts.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'GCP-SEC'
+            })
+
+    # Check 3: GCS bucket without uniform access
+    if re.search(r'storage\.v1\.bucket|storage\.googleapis\.com', content, re.IGNORECASE):
+        if not re.search(r'uniformBucketLevelAccess|iamConfiguration', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'storage' in l.lower() and 'bucket' in l.lower()), 1)
+            findings.append({
+                'severity': 'medium', 'category': 'security',
+                'title': 'GCP: Bucket Without Uniform Access',
+                'description': 'GCS bucket does not enforce uniform bucket-level access (uses legacy ACLs).',
+                'recommendation': 'Enable uniformBucketLevelAccess in iamConfiguration for consistent IAM policies.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'GCP-SEC'
+            })
+
+    # Check 4: GCS bucket publicly accessible
+    if re.search(r'storage\.v1\.bucket|storage\.googleapis\.com', content, re.IGNORECASE):
+        if re.search(r'allUsers|allAuthenticatedUsers', content):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'allUsers' in l or 'allAuthenticatedUsers' in l), 1)
+            findings.append({
+                'severity': 'critical', 'category': 'security',
+                'title': 'GCP: Bucket Publicly Accessible',
+                'description': 'GCS bucket grants access to allUsers or allAuthenticatedUsers — data is publicly exposed.',
+                'recommendation': 'Remove allUsers/allAuthenticatedUsers bindings and use specific IAM members.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'GCP-SEC'
+            })
+
+    # Check 5: Cloud SQL without SSL enforcement
+    if re.search(r'sqladmin\.v1\.instance|sql\.googleapis\.com', content, re.IGNORECASE):
+        if not re.search(r'requireSsl.*true|sslMode', content, re.IGNORECASE):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'sql' in l.lower() and ('instance' in l.lower() or 'sqladmin' in l.lower())), 1)
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'GCP: Cloud SQL Without SSL',
+                'description': 'Cloud SQL instance does not enforce SSL connections, allowing unencrypted traffic.',
+                'recommendation': 'Set requireSsl: true in settings.ipConfiguration to enforce encrypted connections.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'GCP-SEC'
+            })
+
+    # Check 6: Cloud SQL with public IP
+    if re.search(r'sqladmin\.v1\.instance|sql\.googleapis\.com', content, re.IGNORECASE):
+        if re.search(r'ipv4Enabled.*true|authorizedNetworks.*0\.0\.0\.0', content, re.IGNORECASE):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'ipv4Enabled' in l or 'authorizedNetworks' in l), 1)
+            findings.append({
+                'severity': 'critical', 'category': 'security',
+                'title': 'GCP: Cloud SQL Publicly Accessible',
+                'description': 'Cloud SQL instance has a public IP or allows connections from 0.0.0.0/0.',
+                'recommendation': 'Disable ipv4Enabled and use Private IP with VPC peering or Cloud SQL Proxy.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'GCP-SEC'
+            })
+
+    # Check 7: No audit logging
+    if re.search(r'(compute|storage|sql|container)', content, re.IGNORECASE):
+        if not re.search(r'(auditConfig|logConfig|logging)', content, re.IGNORECASE):
+            findings.append({
+                'severity': 'medium', 'category': 'security',
+                'title': 'GCP: No Audit Logging Configured',
+                'description': 'Template does not configure audit logging for deployed resources.',
+                'recommendation': 'Enable Cloud Audit Logs and configure log sinks for security monitoring.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'GCP-SEC'
+            })
+
+    # Check 8: GKE cluster without private nodes
+    if re.search(r'container\.v1\.cluster|container\.googleapis\.com', content, re.IGNORECASE):
+        if not re.search(r'enablePrivateNodes.*true|privateClusterConfig', content, re.IGNORECASE):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'container' in l.lower() and 'cluster' in l.lower()), 1)
+            findings.append({
+                'severity': 'high', 'category': 'security',
+                'title': 'GCP: GKE Cluster Without Private Nodes',
+                'description': 'GKE cluster nodes have public IPs, exposing them to the internet.',
+                'recommendation': 'Enable privateClusterConfig with enablePrivateNodes: true.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'GCP-SEC'
+            })
+
+    # Check 9: GKE without network policy
+    if re.search(r'container\.v1\.cluster|container\.googleapis\.com', content, re.IGNORECASE):
+        if not re.search(r'networkPolicy|networkPolicyConfig', content, re.IGNORECASE):
+            line_num = next((i+1 for i, l in enumerate(lines) if 'container' in l.lower() and 'cluster' in l.lower()), 1)
+            findings.append({
+                'severity': 'medium', 'category': 'security',
+                'title': 'GCP: GKE Without Network Policy',
+                'description': 'GKE cluster does not have network policy enabled — pods can communicate freely.',
+                'recommendation': 'Enable networkPolicy in addonsConfig for pod-level network segmentation.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'GCP-SEC'
+            })
+
+    # Check 10: Hardcoded secrets
+    secret_patterns = re.finditer(r'(password|secret|api_key|private_key|token)\s*[:=]\s*["\']([^"\']{8,})["\']', content, re.IGNORECASE)
+    for match in secret_patterns:
+        context = content[max(0, match.start()-100):match.end()+100]
+        if 'secretmanager' not in context.lower() and 'kms' not in context.lower():
+            line_num = content[:match.start()].count('\n') + 1
+            findings.append({
+                'severity': 'critical', 'category': 'security',
+                'title': 'GCP: Hardcoded Secret Detected',
+                'description': 'Sensitive value appears hardcoded instead of using Secret Manager or KMS.',
+                'recommendation': 'Use Google Secret Manager or Cloud KMS for managing sensitive values.',
+                'file_path': file_path, 'line_number': line_num, 'framework': 'GCP-SEC'
+            })
+            break
+
+    # Check 11: Service account with owner/editor role
+    if re.search(r'(roles/owner|roles/editor)', content):
+        line_num = next((i+1 for i, l in enumerate(lines) if 'roles/owner' in l or 'roles/editor' in l), 1)
+        findings.append({
+            'severity': 'critical', 'category': 'security',
+            'title': 'GCP: Overly Permissive IAM Role',
+            'description': 'Service account or member granted Owner or Editor role — violates least privilege.',
+            'recommendation': 'Use specific predefined roles or custom roles with minimal permissions.',
+            'file_path': file_path, 'line_number': line_num, 'framework': 'GCP-SEC'
+        })
+
+    # Check 12: No labels/tags on resources
+    if re.search(r'(compute|storage|sql|container)', content, re.IGNORECASE):
+        if not re.search(r'labels', content, re.IGNORECASE):
+            findings.append({
+                'severity': 'low', 'category': 'cost',
+                'title': 'GCP: Resources Without Labels',
+                'description': 'Resources do not have labels for cost allocation and organization.',
+                'recommendation': 'Add labels (environment, team, project) for cost tracking and resource management.',
+                'file_path': file_path, 'line_number': 1, 'framework': 'GCP-SEC'
+            })
+
+    return findings
+
+
 def detect_file_type(file_path, content=''):
     """Detect the type of infrastructure file."""
     path_lower = file_path.lower()
@@ -1220,21 +1656,201 @@ def detect_file_type(file_path, content=''):
         return 'dockerfile'
     elif '.github/workflows' in path_lower or 'jenkinsfile' in path_lower.lower():
         return 'cicd'
+    elif path_lower.endswith('.json'):
+        # Check for CloudFormation or ARM templates
+        if 'AWSTemplateFormatVersion' in content or 'AWS::' in content:
+            return 'cloudformation'
+        elif '$schema' in content and 'azure' in content.lower():
+            return 'arm'
     elif path_lower.endswith(('.yaml', '.yml')):
-        # Check content to determine if it's Kubernetes or CI/CD
-        if any(kw in content for kw in ['apiVersion:', 'kind: Deployment', 'kind: Service', 'kind: Pod',
+        # Check content to determine type
+        if 'AWSTemplateFormatVersion' in content or 'AWS::' in content:
+            return 'cloudformation'
+        elif any(kw in content for kw in ['compute.v1.', 'storage.v1.', 'sqladmin.v1.',
+                                           'container.v1.', 'googleapis.com', 'gcp-types/']):
+            return 'gcp'
+        elif any(kw in content for kw in ['apiVersion:', 'kind: Deployment', 'kind: Service', 'kind: Pod',
                                           'kind: StatefulSet', 'kind: DaemonSet', 'kind: ConfigMap',
                                           'kind: Ingress', 'kind: NetworkPolicy', 'kind: ClusterRole']):
             return 'kubernetes'
         elif any(kw in content for kw in ['stages:', 'pipeline:', 'jobs:', 'steps:', 'on:']):
             return 'cicd'
         else:
-            return 'kubernetes'  # Default YAML to kubernetes
+            return 'kubernetes'
+    elif path_lower.endswith('.jinja') or path_lower.endswith('.jinja2'):
+        return 'gcp'
     return None
+
+
+def validate_content(content, file_type):
+    """Validate that the content is actually a valid infrastructure config file.
+    Returns (is_valid, error_message) tuple."""
+    content_stripped = content.strip()
+
+    # Basic checks: must have minimum length and not be gibberish
+    if len(content_stripped) < 10:
+        return False, 'Content is too short to be a valid configuration file.'
+
+    # Check if content has at least some structure (not just random text)
+    lines = [l for l in content_stripped.split('\n') if l.strip()]
+    if len(lines) < 2:
+        return False, 'Content must have at least 2 lines to be a valid configuration file.'
+
+    if file_type == 'kubernetes':
+        # Must have YAML-like structure: keys at start of lines (with optional indentation)
+        # Valid YAML has "key:" at the beginning of a line (possibly indented)
+        yaml_line_pattern = re.compile(r'^\s*\w[\w\-]*\s*:', re.MULTILINE)
+        yaml_lines_found = len(yaml_line_pattern.findall(content))
+        if yaml_lines_found < 3:
+            return False, 'Invalid Kubernetes YAML: content does not have valid YAML structure. Each key must be on its own line.'
+
+        # Check that K8s-specific keywords appear at start of their own lines
+        k8s_line_keywords = [
+            r'^\s*apiVersion:', r'^\s*kind:', r'^\s*metadata:', r'^\s*spec:',
+            r'^\s*containers:', r'^\s*image:', r'^\s*ports:', r'^\s*labels:',
+            r'^\s*selector:', r'^\s*replicas:', r'^\s*template:', r'^\s*volumes:',
+            r'^\s*resources:', r'^\s*name:'
+        ]
+        keyword_count = sum(1 for kw in k8s_line_keywords if re.search(kw, content, re.MULTILINE))
+        if keyword_count < 2:
+            return False, 'Invalid Kubernetes YAML: no Kubernetes-specific keywords found (apiVersion, kind, spec, containers, etc.).'
+
+        # Try basic YAML parsing to catch syntax errors
+        try:
+            import yaml
+            parsed = yaml.safe_load(content)
+            # Check semantic structure: metadata and spec should be dicts, not None
+            if isinstance(parsed, dict):
+                if 'metadata' in parsed and parsed['metadata'] is None:
+                    return False, 'Invalid Kubernetes YAML: "metadata:" has no nested content. Check indentation — child keys must be indented under their parent.'
+                if 'spec' in parsed and parsed['spec'] is None:
+                    return False, 'Invalid Kubernetes YAML: "spec:" has no nested content. Check indentation — child keys must be indented under their parent.'
+        except ImportError:
+            pass  # yaml not available, skip parse check
+        except Exception as e:
+            err_str = str(e)
+            # Extract a short meaningful error
+            if 'could not find expected' in err_str or 'mapping values' in err_str or 'did not find expected' in err_str:
+                return False, f'Invalid Kubernetes YAML syntax: {err_str.split(chr(10))[0][:120]}'
+
+    elif file_type == 'terraform':
+        # Must have HCL-like structure with blocks or assignments
+        has_hcl_structure = any(kw in content for kw in [
+            'resource ', 'variable ', 'output ', 'provider ', 'module ',
+            'data ', 'terraform ', 'locals ', '= {', '= "', '= var.',
+            'source ', 'backend '
+        ])
+        has_braces = '{' in content and '}' in content
+        if not has_hcl_structure and not has_braces:
+            return False, 'Invalid Terraform config: no HCL structure found (resource, variable, provider blocks, etc.).'
+
+    elif file_type == 'dockerfile':
+        # Must have Dockerfile instructions
+        dockerfile_instructions = ['FROM', 'RUN', 'CMD', 'ENTRYPOINT', 'COPY', 'ADD',
+                                   'WORKDIR', 'EXPOSE', 'ENV', 'ARG', 'VOLUME', 'USER',
+                                   'LABEL', 'HEALTHCHECK', 'SHELL', 'STOPSIGNAL']
+        has_instruction = any(
+            any(line.strip().upper().startswith(inst) for inst in dockerfile_instructions)
+            for line in lines
+        )
+        if not has_instruction:
+            return False, 'Invalid Dockerfile: no valid Dockerfile instructions found (FROM, RUN, COPY, CMD, etc.).'
+        # Must have FROM as one of the instructions
+        has_from = any(line.strip().upper().startswith('FROM') for line in lines)
+        if not has_from:
+            return False, 'Invalid Dockerfile: missing required FROM instruction.'
+
+    elif file_type == 'cicd':
+        # Must have pipeline-like structure
+        has_cicd_keywords = any(kw in content for kw in [
+            'name:', 'on:', 'jobs:', 'steps:', 'runs-on:', 'uses:',
+            'pipeline:', 'stages:', 'stage:', 'script:', 'image:',
+            'trigger:', 'build:', 'deploy:', 'test:', 'workflow_dispatch',
+            'pull_request:', 'push:', 'schedule:'
+        ])
+        has_yaml_structure = any(':' in line for line in lines[:10])
+        if not has_cicd_keywords:
+            return False, 'Invalid CI/CD config: no pipeline keywords found (jobs, steps, stages, pipeline, etc.).'
+        if not has_yaml_structure:
+            return False, 'Invalid CI/CD config: content does not have valid YAML/pipeline structure.'
+        # Try YAML parsing
+        try:
+            import yaml
+            yaml.safe_load(content)
+        except ImportError:
+            pass
+        except Exception as e:
+            err_str = str(e)
+            if 'could not find expected' in err_str or 'mapping values' in err_str or 'did not find expected' in err_str:
+                return False, f'Invalid CI/CD YAML syntax: {err_str.split(chr(10))[0][:120]}'
+
+    elif file_type == 'cloudformation':
+        # Must have CloudFormation structure
+        has_cfn_keywords = any(kw in content for kw in [
+            'AWSTemplateFormatVersion', 'Resources:', 'AWS::', 'Type:',
+            'Properties:', 'Parameters:', 'Outputs:', 'Conditions:',
+            'Mappings:', 'Description:'
+        ])
+        if not has_cfn_keywords:
+            return False, 'Invalid CloudFormation template: no AWS CloudFormation keywords found (AWSTemplateFormatVersion, Resources, AWS::, etc.).'
+        # Try parsing (YAML or JSON)
+        try:
+            if content_stripped.startswith('{'):
+                json.loads(content)
+            else:
+                import yaml
+                yaml.safe_load(content)
+        except ImportError:
+            pass
+        except Exception as e:
+            err_str = str(e)
+            return False, f'Invalid CloudFormation template syntax: {str(e).split(chr(10))[0][:120]}'
+
+    elif file_type == 'arm':
+        # Must have ARM template structure — require at least one Azure-specific keyword
+        has_azure_specific = any(kw in content for kw in [
+            '$schema', 'contentVersion', 'Microsoft.', 'dependsOn',
+            'azure', 'armTemplate', 'deploymentTemplate'
+        ])
+        has_structure = any(kw in content for kw in [
+            'resources', 'parameters', 'variables', 'outputs', 'apiVersion'
+        ])
+        has_json_structure = ('{' in content and '}' in content) or (':' in content)
+        if not has_azure_specific:
+            return False, 'Invalid ARM template: no Azure-specific keywords found ($schema, contentVersion, Microsoft.*, etc.).'
+        if not has_structure or not has_json_structure:
+            return False, 'Invalid ARM template: content does not have valid ARM template structure.'
+        # Try JSON parsing
+        try:
+            json.loads(content)
+        except Exception as e:
+            if '{' in content:
+                return False, f'Invalid ARM template JSON syntax: {str(e)[:120]}'
+
+    elif file_type == 'gcp':
+        # Must have GCP Deployment Manager structure
+        # Require at least one GCP-specific keyword (not just generic YAML keys)
+        gcp_specific = any(kw in content for kw in [
+            'compute.v1.', 'storage.v1.', 'sqladmin.v1.', 'container.v1.',
+            'googleapis.com', 'gcp-types/', 'machineType:', 'sourceImage:',
+            'google_compute', 'google_storage', 'google_container'
+        ])
+        has_structure = any(kw in content for kw in ['resources:', 'type:', 'properties:'])
+        if not gcp_specific:
+            return False, 'Invalid GCP config: no GCP-specific keywords found (compute.v1, storage.v1, googleapis.com, gcp-types, etc.).'
+        if not has_structure:
+            return False, 'Invalid GCP config: no deployment structure found (resources, type, properties).'
+
+    return True, ''
 
 
 def analyze_content(content, file_type, file_path='unknown'):
     """Route content to the appropriate analyzer."""
+    # Validate content structure first (safety net — routes should validate before calling)
+    is_valid, error_msg = validate_content(content, file_type)
+    if not is_valid:
+        return []
+
     if file_type == 'kubernetes':
         findings = analyze_kubernetes(content, file_path)
     elif file_type == 'terraform':
@@ -1243,6 +1859,12 @@ def analyze_content(content, file_type, file_path='unknown'):
         findings = analyze_dockerfile(content, file_path)
     elif file_type == 'cicd':
         findings = analyze_cicd(content, file_path)
+    elif file_type == 'cloudformation':
+        findings = analyze_cloudformation(content, file_path)
+    elif file_type == 'arm':
+        findings = analyze_arm(content, file_path)
+    elif file_type == 'gcp':
+        findings = analyze_gcp(content, file_path)
     else:
         findings = []
 
@@ -1667,6 +2289,253 @@ runs-on: ubuntu-latest
 - run: cosign sign --yes ${{ env.IMAGE_NAME }}:${{ github.sha }}
 # Or generate checksums:
 # - run: sha256sum dist/* > checksums.txt''',
+    # CloudFormation fixes
+    'CFN: S3 Bucket Without Encryption': '''MyBucket:
+  Type: AWS::S3::Bucket
+  Properties:
+    BucketEncryption:
+      ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256''',
+    'CFN: S3 Public Access Not Blocked': '''MyBucket:
+  Type: AWS::S3::Bucket
+  Properties:
+    PublicAccessBlockConfiguration:
+      BlockPublicAcls: true
+      BlockPublicPolicy: true
+      IgnorePublicAcls: true
+      RestrictPublicBuckets: true''',
+    'CFN: Security Group Open to World': '''SecurityGroupIngress:
+  - IpProtocol: tcp
+    FromPort: 443
+    ToPort: 443
+    CidrIp: 10.0.0.0/8  # Restrict to known ranges''',
+    'CFN: IAM Policy with Wildcard Actions': '''PolicyDocument:
+  Statement:
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:PutObject
+        - s3:ListBucket
+      Resource:
+        - !GetAtt MyBucket.Arn
+        - !Sub "${MyBucket.Arn}/*"''',
+    'CFN: IAM Policy with Wildcard Resource': '''PolicyDocument:
+  Statement:
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+      Resource:
+        - !Sub "arn:aws:s3:::${BucketName}/*"''',
+    'CFN: No DeletionPolicy on Critical Resource': '''MyDatabase:
+  Type: AWS::RDS::DBInstance
+  DeletionPolicy: Retain  # or Snapshot
+  Properties:
+    # ... other properties''',
+    'CFN: RDS Without Encryption': '''MyDatabase:
+  Type: AWS::RDS::DBInstance
+  Properties:
+    StorageEncrypted: true
+    KmsKeyId: !Ref MyKMSKey''',
+    'CFN: RDS Publicly Accessible': '''MyDatabase:
+  Type: AWS::RDS::DBInstance
+  Properties:
+    PubliclyAccessible: false
+    DBSubnetGroupName: !Ref PrivateSubnetGroup''',
+    'CFN: No Logging Configuration': '''TrailLogs:
+  Type: AWS::CloudTrail::Trail
+  Properties:
+    IsLogging: true
+    S3BucketName: !Ref LogBucket
+    IncludeGlobalServiceEvents: true
+    IsMultiRegionTrail: true''',
+    'CFN: EBS Volume Not Encrypted': '''MyVolume:
+  Type: AWS::EC2::Volume
+  Properties:
+    Encrypted: true
+    KmsKeyId: !Ref MyKMSKey
+    AvailabilityZone: !Select [0, !GetAZs ""]
+    Size: 100''',
+    'CFN: Lambda Not in VPC': '''MyFunction:
+  Type: AWS::Lambda::Function
+  Properties:
+    VpcConfig:
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref LambdaSG''',
+    'CFN: Hardcoded Secret Detected': '''Parameters:
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: Database password
+# Or use Secrets Manager:
+# !Sub "{{resolve:secretsmanager:MySecret:SecretString:password}}"''',
+    # Azure ARM fixes
+    'ARM: Storage Account Without HTTPS Enforcement': '''{
+  "type": "Microsoft.Storage/storageAccounts",
+  "properties": {
+    "supportsHttpsTrafficOnly": true,
+    "minimumTlsVersion": "TLS1_2"
+  }
+}''',
+    'ARM: Storage Account Without Encryption': '''{
+  "type": "Microsoft.Storage/storageAccounts",
+  "properties": {
+    "encryption": {
+      "services": {
+        "blob": { "enabled": true },
+        "file": { "enabled": true }
+      },
+      "keySource": "Microsoft.Storage"
+    }
+  }
+}''',
+    'ARM: Public IP Address Assigned': '''// Use Private Endpoints instead:
+{
+  "type": "Microsoft.Network/privateEndpoints",
+  "properties": {
+    "privateLinkServiceConnections": [{
+      "properties": {
+        "privateLinkServiceId": "[resourceId(...)]",
+        "groupIds": ["blob"]
+      }
+    }]
+  }
+}''',
+    'ARM: No Network Security Group': '''{
+  "type": "Microsoft.Network/networkSecurityGroups",
+  "properties": {
+    "securityRules": [{
+      "name": "DenyAllInbound",
+      "properties": {
+        "priority": 4096,
+        "access": "Deny",
+        "direction": "Inbound",
+        "sourceAddressPrefix": "*",
+        "destinationAddressPrefix": "*",
+        "protocol": "*"
+      }
+    }]
+  }
+}''',
+    'ARM: NSG Rule Open to World': '''{
+  "name": "AllowSpecificIP",
+  "properties": {
+    "priority": 100,
+    "access": "Allow",
+    "direction": "Inbound",
+    "sourceAddressPrefix": "10.0.0.0/8",
+    "destinationPortRange": "443",
+    "protocol": "Tcp"
+  }
+}''',
+    'ARM: No Diagnostic Settings': '''{
+  "type": "Microsoft.Insights/diagnosticSettings",
+  "properties": {
+    "workspaceId": "[resourceId(''Microsoft.OperationalInsights/workspaces'', variables(''logAnalyticsName''))]",
+    "logs": [{ "category": "AuditEvent", "enabled": true }],
+    "metrics": [{ "category": "AllMetrics", "enabled": true }]
+  }
+}''',
+    'ARM: SQL Server Without Auditing': '''{
+  "type": "Microsoft.Sql/servers/auditingSettings",
+  "properties": {
+    "state": "Enabled",
+    "storageEndpoint": "[reference(resourceId(''Microsoft.Storage/storageAccounts'', variables(''storageAccountName''))).primaryEndpoints.blob]",
+    "retentionDays": 90
+  }
+}''',
+    'ARM: SQL Server Public Network Access': '''{
+  "type": "Microsoft.Sql/servers",
+  "properties": {
+    "publicNetworkAccess": "Disabled"
+  }
+}
+// Use Private Endpoints for connectivity''',
+    'ARM: VM Without Disk Encryption': '''{
+  "type": "Microsoft.Compute/virtualMachines",
+  "properties": {
+    "securityProfile": {
+      "encryptionAtHost": true
+    }
+  }
+}
+// Or use Azure Disk Encryption extension''',
+    'ARM: Hardcoded Secret Detected': '''{
+  "parameters": {
+    "adminPassword": {
+      "type": "secureString",
+      "metadata": {
+        "description": "Admin password from Key Vault"
+      }
+    }
+  }
+}
+// Or reference Key Vault:
+// "[reference(resourceId(''Microsoft.KeyVault/vaults/secrets'', ...))]"''',
+    # GCP fixes
+    'GCP: Instance with External IP': '''# Remove accessConfigs to avoid public IP
+networkInterfaces:
+- network: $(ref.my-network.selfLink)
+  # No accessConfigs = no external IP
+  # Use Cloud NAT for outbound access''',
+    'GCP: Firewall Rule Open to World': '''# Restrict sourceRanges to known IPs
+sourceRanges:
+- "10.0.0.0/8"
+- "172.16.0.0/12"
+# Never use 0.0.0.0/0 for production''',
+    'GCP: Bucket Without Uniform Access': '''iamConfiguration:
+  uniformBucketLevelAccess:
+    enabled: true''',
+    'GCP: Bucket Publicly Accessible': '''# Remove allUsers/allAuthenticatedUsers
+# Use specific IAM members:
+bindings:
+- role: roles/storage.objectViewer
+  members:
+  - serviceAccount:my-sa@project.iam.gserviceaccount.com''',
+    'GCP: Cloud SQL Without SSL': '''settings:
+  ipConfiguration:
+    requireSsl: true
+    sslMode: ENCRYPTED_ONLY''',
+    'GCP: Cloud SQL Publicly Accessible': '''settings:
+  ipConfiguration:
+    ipv4Enabled: false
+    privateNetwork: projects/PROJECT/global/networks/VPC_NAME
+    # Use Cloud SQL Proxy for access''',
+    'GCP: No Audit Logging Configured': '''# Enable audit logging via org policy or resource config
+auditConfigs:
+- auditLogConfigs:
+  - logType: ADMIN_READ
+  - logType: DATA_READ
+  - logType: DATA_WRITE
+  service: allServices''',
+    'GCP: GKE Cluster Without Private Nodes': '''privateClusterConfig:
+  enablePrivateNodes: true
+  enablePrivateEndpoint: false
+  masterIpv4CidrBlock: "172.16.0.0/28"''',
+    'GCP: GKE Without Network Policy': '''addonsConfig:
+  networkPolicyConfig:
+    disabled: false
+networkPolicy:
+  enabled: true
+  provider: CALICO''',
+    'GCP: Hardcoded Secret Detected': '''# Use Secret Manager instead
+# gcloud secrets create my-secret --data-file=secret.txt
+# Reference in template:
+# $(ref.my-secret.secretData)
+# Or use: gcp-types/secretmanager-v1:projects.secrets''',
+    'GCP: Overly Permissive IAM Role': '''# Use specific predefined roles
+bindings:
+- role: roles/storage.objectViewer  # Not roles/editor
+  members:
+  - serviceAccount:my-sa@project.iam.gserviceaccount.com''',
+    'GCP: Resources Without Labels': '''labels:
+  environment: production
+  team: platform
+  project: my-app
+  managed-by: deployment-manager''',
 }
 
 
@@ -1704,7 +2573,7 @@ def count_by_severity(findings):
 def scan_directory(directory_path, max_files=500):
     """Walk a directory and scan all infrastructure files. Limits to max_files to prevent timeouts."""
     all_findings = []
-    scannable_extensions = ('.tf', '.yaml', '.yml', '.dockerfile')
+    scannable_extensions = ('.tf', '.yaml', '.yml', '.dockerfile', '.json', '.jinja', '.jinja2')
     scannable_names = ('Dockerfile', 'Jenkinsfile', 'docker-compose.yml', 'docker-compose.yaml')
     files_scanned = 0
 
@@ -1933,7 +2802,13 @@ def demo_scan():
     file_type = request.form.get('file_type', 'kubernetes')
 
     if custom_code:
-        # User pasted their own code
+        # User pasted their own code — validate first
+        is_valid, error_msg = validate_content(custom_code, file_type)
+        if not is_valid:
+            return jsonify({
+                'error': True,
+                'message': error_msg
+            }), 400
         scan_code = custom_code
     else:
         # Use sample code
@@ -2725,6 +3600,12 @@ def analyze():
                 flash('Please paste some code to analyze.', 'error')
                 return render_template('analyze.html', results=None)
 
+            # Validate content structure before scanning
+            is_valid, error_msg = validate_content(code, file_type)
+            if not is_valid:
+                flash(f'Invalid configuration: {error_msg}', 'error')
+                return render_template('analyze.html', results=None)
+
             findings_list = analyze_content(code, file_type, f'manual_input.{file_type}')
             risk_score = calculate_risk_score(findings_list)
             severity_counts = count_by_severity(findings_list)
@@ -3021,6 +3902,46 @@ def checks_page():
             {'title': 'Auto-Deploy Without Approval', 'severity': 'high', 'framework': 'CICD-SEC', 'description': 'Production deployment without manual approval gate'},
             {'title': 'Self-Hosted Runner Used', 'severity': 'medium', 'framework': 'CICD-SEC', 'description': 'Self-hosted runners may have persistent state and security risks'},
             {'title': 'No Artifact Signing', 'severity': 'low', 'framework': 'CICD-SEC', 'description': 'Artifacts published without signing or checksum verification'},
+        ],
+        'cloudformation': [
+            {'title': 'CFN: S3 Bucket Without Encryption', 'severity': 'high', 'framework': 'AWS-WA-SEC', 'description': 'S3 bucket missing server-side encryption in CloudFormation template'},
+            {'title': 'CFN: S3 Public Access Not Blocked', 'severity': 'high', 'framework': 'AWS-WA-SEC', 'description': 'S3 bucket without PublicAccessBlockConfiguration'},
+            {'title': 'CFN: Security Group Open to World', 'severity': 'critical', 'framework': 'AWS-WA-SEC', 'description': 'Security group ingress allows 0.0.0.0/0 — exposed to internet'},
+            {'title': 'CFN: IAM Policy with Wildcard Actions', 'severity': 'critical', 'framework': 'AWS-WA-SEC', 'description': 'IAM policy grants all actions (*) violating least-privilege'},
+            {'title': 'CFN: IAM Policy with Wildcard Resource', 'severity': 'high', 'framework': 'AWS-WA-SEC', 'description': 'IAM policy applies to all resources (*) instead of specific ARNs'},
+            {'title': 'CFN: No DeletionPolicy on Critical Resource', 'severity': 'high', 'framework': 'AWS-WA-REL', 'description': 'Critical resource without DeletionPolicy — stack delete destroys data'},
+            {'title': 'CFN: RDS Without Encryption', 'severity': 'high', 'framework': 'AWS-WA-SEC', 'description': 'RDS instance without StorageEncrypted enabled'},
+            {'title': 'CFN: RDS Publicly Accessible', 'severity': 'critical', 'framework': 'AWS-WA-SEC', 'description': 'RDS instance publicly accessible from the internet'},
+            {'title': 'CFN: No Logging Configuration', 'severity': 'medium', 'framework': 'AWS-WA-SEC', 'description': 'No CloudTrail or CloudWatch Logs for audit and monitoring'},
+            {'title': 'CFN: EBS Volume Not Encrypted', 'severity': 'high', 'framework': 'AWS-WA-SEC', 'description': 'EBS volume without encryption enabled'},
+            {'title': 'CFN: Lambda Not in VPC', 'severity': 'low', 'framework': 'AWS-WA-SEC', 'description': 'Lambda function not configured within a VPC'},
+            {'title': 'CFN: Hardcoded Secret Detected', 'severity': 'critical', 'framework': 'AWS-WA-SEC', 'description': 'Sensitive values hardcoded instead of using NoEcho or Secrets Manager'},
+        ],
+        'arm': [
+            {'title': 'ARM: Storage Account Without HTTPS Enforcement', 'severity': 'high', 'framework': 'AZURE-SEC', 'description': 'Storage account allows unencrypted HTTP connections'},
+            {'title': 'ARM: Storage Account Without Encryption', 'severity': 'high', 'framework': 'AZURE-SEC', 'description': 'Storage account without explicit encryption configuration'},
+            {'title': 'ARM: Public IP Address Assigned', 'severity': 'medium', 'framework': 'AZURE-SEC', 'description': 'Resource has public IP increasing attack surface'},
+            {'title': 'ARM: No Network Security Group', 'severity': 'high', 'framework': 'AZURE-SEC', 'description': 'Network interface or VNet without associated NSG'},
+            {'title': 'ARM: NSG Rule Open to World', 'severity': 'critical', 'framework': 'AZURE-SEC', 'description': 'NSG rule allows inbound from any source (0.0.0.0/0 or *)'},
+            {'title': 'ARM: No Diagnostic Settings', 'severity': 'medium', 'framework': 'AZURE-SEC', 'description': 'Resources without diagnostic settings for monitoring'},
+            {'title': 'ARM: SQL Server Without Auditing', 'severity': 'medium', 'framework': 'AZURE-SEC', 'description': 'Azure SQL Server without auditing for security monitoring'},
+            {'title': 'ARM: SQL Server Public Network Access', 'severity': 'high', 'framework': 'AZURE-SEC', 'description': 'SQL Server with public network access enabled'},
+            {'title': 'ARM: VM Without Disk Encryption', 'severity': 'high', 'framework': 'AZURE-SEC', 'description': 'Virtual machine without disk encryption configured'},
+            {'title': 'ARM: Hardcoded Secret Detected', 'severity': 'critical', 'framework': 'AZURE-SEC', 'description': 'Sensitive values hardcoded instead of using secureString or Key Vault'},
+        ],
+        'gcp': [
+            {'title': 'GCP: Firewall Rule Open to World', 'severity': 'critical', 'framework': 'GCP-SEC', 'description': 'Firewall rule allows ingress from 0.0.0.0/0 — exposed to internet'},
+            {'title': 'GCP: Bucket Publicly Accessible', 'severity': 'critical', 'framework': 'GCP-SEC', 'description': 'GCS bucket grants access to allUsers or allAuthenticatedUsers'},
+            {'title': 'GCP: Cloud SQL Publicly Accessible', 'severity': 'critical', 'framework': 'GCP-SEC', 'description': 'Cloud SQL has public IP or allows connections from 0.0.0.0/0'},
+            {'title': 'GCP: Hardcoded Secret Detected', 'severity': 'critical', 'framework': 'GCP-SEC', 'description': 'Sensitive values hardcoded instead of using Secret Manager or KMS'},
+            {'title': 'GCP: Overly Permissive IAM Role', 'severity': 'critical', 'framework': 'GCP-SEC', 'description': 'Service account granted Owner or Editor role — violates least privilege'},
+            {'title': 'GCP: Cloud SQL Without SSL', 'severity': 'high', 'framework': 'GCP-SEC', 'description': 'Cloud SQL instance does not enforce SSL connections'},
+            {'title': 'GCP: GKE Cluster Without Private Nodes', 'severity': 'high', 'framework': 'GCP-SEC', 'description': 'GKE cluster nodes have public IPs exposed to internet'},
+            {'title': 'GCP: Instance with External IP', 'severity': 'medium', 'framework': 'GCP-SEC', 'description': 'Compute instance has external IP increasing attack surface'},
+            {'title': 'GCP: Bucket Without Uniform Access', 'severity': 'medium', 'framework': 'GCP-SEC', 'description': 'GCS bucket uses legacy ACLs instead of uniform IAM access'},
+            {'title': 'GCP: No Audit Logging Configured', 'severity': 'medium', 'framework': 'GCP-SEC', 'description': 'Template does not configure audit logging for resources'},
+            {'title': 'GCP: GKE Without Network Policy', 'severity': 'medium', 'framework': 'GCP-SEC', 'description': 'GKE cluster without network policy — pods communicate freely'},
+            {'title': 'GCP: Resources Without Labels', 'severity': 'low', 'framework': 'GCP-SEC', 'description': 'Resources without labels for cost allocation and organization'},
         ],
     }
     return render_template('checks.html', checks=checks)

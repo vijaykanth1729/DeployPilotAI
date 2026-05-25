@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Security Checks — All 65+ Rules{% endblock %}
+{% block title %}Security Checks — All 100+ Rules{% endblock %}
 {% block content %}
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
     <div class="mb-10">
         <h1 class="text-3xl font-bold text-white mb-3">Security Checks Matrix</h1>
-        <p class="text-gray-400 max-w-2xl">All 65+ security checks DeployPilot AI performs, mapped to industry compliance frameworks. Each check includes severity, description, and automated fix suggestions.</p>
+        <p class="text-gray-400 max-w-2xl">All 100+ security checks DeployPilot AI performs across Kubernetes, Terraform, AWS CloudFormation, Azure ARM, GCP, Docker, and CI/CD — mapped to industry compliance frameworks with automated fix suggestions.</p>
     </div>
 
     <!-- Summary + Quick Nav -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-10">
         <a href="#kubernetes" class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center hover:border-cyan-500/50 transition">
             <div class="text-2xl font-bold text-cyan-400">22</div>
             <div class="text-xs text-gray-500 mt-1">Kubernetes</div>
@@ -17,8 +17,20 @@
             <div class="text-2xl font-bold text-purple-400">20</div>
             <div class="text-xs text-gray-500 mt-1">Terraform</div>
         </a>
-        <a href="#dockerfile" class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center hover:border-blue-500/50 transition">
-            <div class="text-2xl font-bold text-blue-400">12</div>
+        <a href="#cloudformation" class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center hover:border-yellow-500/50 transition">
+            <div class="text-2xl font-bold text-yellow-400">12</div>
+            <div class="text-xs text-gray-500 mt-1">AWS CF</div>
+        </a>
+        <a href="#arm" class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center hover:border-blue-500/50 transition">
+            <div class="text-2xl font-bold text-blue-400">10</div>
+            <div class="text-xs text-gray-500 mt-1">Azure ARM</div>
+        </a>
+        <a href="#gcp" class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center hover:border-green-500/50 transition">
+            <div class="text-2xl font-bold text-green-400">12</div>
+            <div class="text-xs text-gray-500 mt-1">GCP</div>
+        </a>
+        <a href="#dockerfile" class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center hover:border-indigo-500/50 transition">
+            <div class="text-2xl font-bold text-indigo-400">12</div>
             <div class="text-xs text-gray-500 mt-1">Dockerfile</div>
         </a>
         <a href="#cicd" class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center hover:border-orange-500/50 transition">
@@ -30,7 +42,10 @@
     {% set categories = [
         ('kubernetes', 'Kubernetes Security', 'CIS Kubernetes Benchmark 1.8', 'cyan'),
         ('terraform', 'Terraform / AWS', 'AWS Well-Architected Framework', 'purple'),
-        ('dockerfile', 'Dockerfile', 'Docker CIS Benchmark', 'blue'),
+        ('cloudformation', 'AWS CloudFormation', 'AWS Well-Architected Framework', 'yellow'),
+        ('arm', 'Azure ARM Templates', 'Azure Security Benchmark', 'blue'),
+        ('gcp', 'GCP Infrastructure', 'GCP Security Best Practices', 'green'),
+        ('dockerfile', 'Dockerfile', 'Docker CIS Benchmark', 'indigo'),
         ('cicd', 'CI/CD Pipelines', 'CI/CD Security Best Practices', 'orange')
     ] %}
 
@@ -72,8 +87,8 @@
 
     <!-- CTA -->
     <div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center mt-10">
-        <h3 class="text-xl font-bold text-white mb-3">Run All 65+ Checks on Your Code</h3>
-        <p class="text-gray-400 text-sm mb-5">Paste code or connect a repo — get results in seconds with fix suggestions.</p>
+        <h3 class="text-xl font-bold text-white mb-3">Run All 100+ Checks on Your Code</h3>
+        <p class="text-gray-400 text-sm mb-5">Supports Kubernetes, Terraform, AWS CloudFormation, Azure ARM, GCP Deployment Manager, Docker, and CI/CD pipelines — get results in seconds with fix suggestions.</p>
         <div class="flex flex-wrap justify-center gap-3">
             <a href="{{ url_for('register') }}" class="bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-6 py-2.5 rounded-lg font-semibold transition glow-cyan text-sm">
                 Start Free — 7 Day Pro Trial

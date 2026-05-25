@@ -16,7 +16,7 @@
             </h1>
             <p class="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
                 Automatically detect misconfigurations, vulnerabilities, and compliance violations
-                in your Kubernetes, Terraform, Docker, and CI/CD pipelines.
+                in your Kubernetes, Terraform, CloudFormation, ARM, GCP, Docker, and CI/CD pipelines.
             </p>
             <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <a href="{{ url_for('register') }}" class="bg-cyan-500 hover:bg-cyan-400 text-gray-900 px-8 py-3.5 rounded-lg font-semibold transition glow-cyan text-lg">
@@ -82,12 +82,15 @@ spec:
                     <select id="demoFileType" class="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-3 py-1.5 focus:border-cyan-500 outline-none">
                         <option value="kubernetes">Kubernetes YAML</option>
                         <option value="terraform">Terraform (.tf)</option>
+                        <option value="cloudformation">AWS CloudFormation</option>
+                        <option value="arm">Azure ARM Template</option>
+                        <option value="gcp">GCP Deployment Manager</option>
                         <option value="dockerfile">Dockerfile</option>
                         <option value="cicd">CI/CD Pipeline</option>
                     </select>
                     <span class="text-xs text-gray-500">Paste your code below</span>
                 </div>
-                <textarea id="demoCodeInput" rows="10" placeholder="Paste your Kubernetes YAML, Terraform, Dockerfile, or CI/CD config here..."
+                <textarea id="demoCodeInput" rows="10" placeholder="Paste your Kubernetes YAML, Terraform, CloudFormation, ARM, GCP, Dockerfile, or CI/CD config here..."
                     class="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-300 font-mono placeholder-gray-600 focus:border-cyan-500 outline-none resize-y"></textarea>
             </div>
 
@@ -278,7 +281,7 @@ spec:
     <!-- Features heading -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h2 class="text-3xl font-bold text-center text-white mb-4">Comprehensive Security Coverage</h2>
-        <p class="text-gray-400 text-center mb-16 max-w-2xl mx-auto">65+ real checks across your entire infrastructure stack</p>
+        <p class="text-gray-400 text-center mb-16 max-w-2xl mx-auto">100+ real checks across your entire infrastructure stack</p>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
                 <div class="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center mb-4">
@@ -295,6 +298,27 @@ spec:
                 <p class="text-gray-400 text-sm">20 checks for encryption, state management, provider pinning, and cloud resource hardening.</p>
             </div>
             <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
+                <div class="w-12 h-12 bg-amber-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <i class="bi bi-stack text-amber-400 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">AWS CloudFormation</h3>
+                <p class="text-gray-400 text-sm">12 checks for S3 encryption, IAM wildcards, DeletionPolicy, RDS security, and logging.</p>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
+                <div class="w-12 h-12 bg-sky-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <i class="bi bi-microsoft text-sky-400 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">Azure ARM Templates</h3>
+                <p class="text-gray-400 text-sm">10 checks for storage encryption, NSG rules, disk encryption, SQL auditing, and secrets.</p>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
+                <div class="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center mb-4">
+                    <i class="bi bi-cloud-fill text-green-400 text-xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-white mb-2">GCP Infrastructure</h3>
+                <p class="text-gray-400 text-sm">12 checks for firewall rules, GCS buckets, Cloud SQL, GKE clusters, IAM roles, and secrets.</p>
+            </div>
+            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
                 <div class="w-12 h-12 bg-cyan-500/10 rounded-lg flex items-center justify-center mb-4">
                     <i class="bi bi-box text-cyan-400 text-xl"></i>
                 </div>
@@ -308,20 +332,6 @@ spec:
                 <h3 class="text-lg font-semibold text-white mb-2">CI/CD Pipeline Security</h3>
                 <p class="text-gray-400 text-sm">12 checks for secret management, action pinning, environment protection, and image scanning.</p>
             </div>
-            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
-                <div class="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center mb-4">
-                    <i class="bi bi-clipboard-check text-green-400 text-xl"></i>
-                </div>
-                <h3 class="text-lg font-semibold text-white mb-2">Compliance Mapping</h3>
-                <p class="text-gray-400 text-sm">Findings mapped to CIS Kubernetes Benchmark, AWS Well-Architected, and Docker CIS standards.</p>
-            </div>
-            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 card-hover">
-                <div class="w-12 h-12 bg-red-500/10 rounded-lg flex items-center justify-center mb-4">
-                    <i class="bi bi-graph-up text-red-400 text-xl"></i>
-                </div>
-                <h3 class="text-lg font-semibold text-white mb-2">Risk Scoring & Trends</h3>
-                <p class="text-gray-400 text-sm">Track your security posture over time with risk scores, trend charts, and severity breakdowns.</p>
-            </div>
         </div>
     </div>
 </section>
@@ -331,7 +341,7 @@ spec:
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h2 class="text-3xl font-bold text-center text-white mb-4">Compliance Frameworks Supported</h2>
         <p class="text-gray-400 text-center mb-12">Map findings to industry-standard security benchmarks</p>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 max-w-6xl mx-auto">
             <div class="text-center p-6 bg-gray-900 border border-gray-800 rounded-xl">
                 <div class="text-3xl font-bold text-cyan-400 mb-2">CIS</div>
                 <div class="text-white font-medium">Kubernetes Benchmark 1.8</div>
@@ -341,6 +351,16 @@ spec:
                 <div class="text-3xl font-bold text-orange-400 mb-2">AWS</div>
                 <div class="text-white font-medium">Well-Architected Framework</div>
                 <p class="text-gray-400 text-sm mt-2">Security, reliability, cost optimization</p>
+            </div>
+            <div class="text-center p-6 bg-gray-900 border border-gray-800 rounded-xl">
+                <div class="text-3xl font-bold text-sky-400 mb-2">Azure</div>
+                <div class="text-white font-medium">Security Benchmark</div>
+                <p class="text-gray-400 text-sm mt-2">Storage, network, identity, encryption</p>
+            </div>
+            <div class="text-center p-6 bg-gray-900 border border-gray-800 rounded-xl">
+                <div class="text-3xl font-bold text-green-400 mb-2">GCP</div>
+                <div class="text-white font-medium">Security Best Practices</div>
+                <p class="text-gray-400 text-sm mt-2">Firewall, IAM, GKE, Cloud SQL</p>
             </div>
             <div class="text-center p-6 bg-gray-900 border border-gray-800 rounded-xl">
                 <div class="text-3xl font-bold text-blue-400 mb-2">Docker</div>
@@ -386,7 +406,7 @@ spec:
                     </tr>
                     <tr class="border-b border-gray-800">
                         <td class="py-3 px-4 text-gray-400">Compliance Mapping</td>
-                        <td class="py-3 px-4 text-center"><span class="text-cyan-400">✓</span> CIS K8s + AWS WA + Docker CIS</td>
+                        <td class="py-3 px-4 text-center"><span class="text-cyan-400">✓</span> CIS K8s + AWS WA + Azure + GCP + Docker CIS</td>
                         <td class="py-3 px-4 text-center text-gray-500">Limited standards</td>
                         <td class="py-3 px-4 text-center text-gray-500">CIS benchmarks</td>
                     </tr>
@@ -506,7 +526,7 @@ spec:
                     <i class="bi bi-plus-lg text-gray-500 group-open:rotate-45 transition-transform"></i>
                 </summary>
                 <div class="px-6 pb-4 text-sm text-gray-400 leading-relaxed">
-                    InfraAudit scans Kubernetes YAML manifests (Deployments, Services, RBAC, NetworkPolicies), Terraform .tf files, Dockerfiles, and CI/CD pipeline configs (GitHub Actions, Jenkins). We detect 65+ real security issues across these file types.
+                    InfraAudit scans Kubernetes YAML manifests (Deployments, Services, RBAC, NetworkPolicies), Terraform .tf files, AWS CloudFormation templates, Azure ARM templates, GCP Deployment Manager configs, Dockerfiles, and CI/CD pipeline configs (GitHub Actions, Jenkins). We detect 100+ real security issues across these file types.
                 </div>
             </details>
 
@@ -556,7 +576,7 @@ spec:
                     <i class="bi bi-plus-lg text-gray-500 group-open:rotate-45 transition-transform"></i>
                 </summary>
                 <div class="px-6 pb-4 text-sm text-gray-400 leading-relaxed">
-                    Free plan includes 2 projects, manual paste scanning, full analysis with all 65+ checks, risk scoring, compliance mapping, and scan history. Upgrade to Pro for unlimited projects, GitHub repo integration, and JSON export.
+                    Free plan includes 2 projects, manual paste scanning, full analysis with all 100+ checks, risk scoring, compliance mapping, and scan history. Upgrade to Pro for unlimited projects, GitHub repo integration, and JSON export.
                 </div>
             </details>
 
@@ -627,6 +647,8 @@ tabSample.addEventListener('click', function() {
     tabPaste.classList.remove('text-cyan-400', 'border-cyan-400');
     tabPaste.classList.add('text-gray-500', 'border-transparent');
     resetScanBtn();
+    var errDiv = document.getElementById('demoValidationError');
+    if (errDiv) errDiv.innerHTML = '';
 });
 
 tabPaste.addEventListener('click', function() {
@@ -638,6 +660,8 @@ tabPaste.addEventListener('click', function() {
     tabSample.classList.remove('text-cyan-400', 'border-cyan-400');
     tabSample.classList.add('text-gray-500', 'border-transparent');
     resetScanBtn();
+    var errDiv = document.getElementById('demoValidationError');
+    if (errDiv) errDiv.innerHTML = '';
 });
 
 function resetScanBtn() {
@@ -652,6 +676,10 @@ function resetScanBtn() {
 document.getElementById('demoScanBtn').addEventListener('click', function() {
     var btn = this;
     var body = '';
+
+    // Clear any previous validation error
+    var prevError = document.getElementById('demoValidationError');
+    if (prevError) prevError.innerHTML = '';
 
     if (usingCustomCode) {
         var code = document.getElementById('demoCodeInput').value.trim();
@@ -671,7 +699,12 @@ document.getElementById('demoScanBtn').addEventListener('click', function() {
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: body
     })
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+        if (!r.ok) {
+            return r.json().then(function(err) { throw err; });
+        }
+        return r.json();
+    })
     .then(function(data) {
         document.getElementById('demoTime').textContent = data.elapsed + 's';
 
@@ -712,9 +745,34 @@ document.getElementById('demoScanBtn').addEventListener('click', function() {
         document.getElementById('demoResults').classList.remove('hidden');
         btn.innerHTML = '<i class="bi bi-check-circle-fill"></i> Scan Complete — ' + data.total + ' findings';
         btn.className = 'w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 bg-green-500/10 text-green-400 border border-green-500/30';
+        // Reset button after 2 seconds so user can scan again
+        setTimeout(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> Run Free Scan';
+            btn.className = 'w-full bg-cyan-500 hover:bg-cyan-400 text-gray-900 py-3 rounded-lg font-bold transition glow-cyan flex items-center justify-center gap-2';
+        }, 2000);
     })
-    .catch(function() {
+    .catch(function(err) {
+        if (err && err.message) {
+            // Validation error — show red error message, keep button ready for retry
+            document.getElementById('demoResults').classList.add('hidden');
+            // Show error inline above the button
+            var errorDiv = document.getElementById('demoValidationError');
+            if (!errorDiv) {
+                errorDiv = document.createElement('div');
+                errorDiv.id = 'demoValidationError';
+                btn.parentNode.insertBefore(errorDiv, btn);
+            }
+            errorDiv.innerHTML =
+                '<div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center mb-4">' +
+                '<i class="bi bi-exclamation-triangle-fill text-red-400 text-lg"></i>' +
+                '<p class="text-red-400 font-semibold mt-2">Invalid Configuration File</p>' +
+                '<p class="text-red-300/70 text-xs mt-1">' + err.message + '</p>' +
+                '<p class="text-gray-500 text-xs mt-2">Please fix your code and try again.</p></div>';
+        }
+        // Always reset button to clickable "Run Free Scan" state
         btn.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> Run Free Scan';
+        btn.className = 'w-full bg-cyan-500 hover:bg-cyan-400 text-gray-900 py-3 rounded-lg font-bold transition glow-cyan flex items-center justify-center gap-2';
         btn.disabled = false;
     });
 });
