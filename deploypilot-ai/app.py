@@ -132,7 +132,12 @@ class Review(db.Model):
     @property
     def reviewer_name(self):
         """Return display_name if set, otherwise user.name."""
-        return self.display_name or self.user.name
+        try:
+            if self.display_name:
+                return self.display_name
+        except Exception:
+            pass
+        return self.user.name
 
 
 class Project(db.Model):
@@ -3932,7 +3937,7 @@ def delete_review(review_id):
     db.session.delete(review)
     db.session.commit()
     flash('Review deleted.', 'success')
-    return redirect(url_for('admin_reviews'))
+    return redirect(url_for('admin_dashboard'))
 
 
 @app.route('/reviews/<int:review_id>/publish', methods=['POST'])
@@ -3945,7 +3950,7 @@ def publish_review(review_id):
     review.is_visible = True
     db.session.commit()
     flash('Review published to home page.', 'success')
-    return redirect(url_for('admin_reviews'))
+    return redirect(url_for('admin_dashboard'))
 
 
 @app.route('/reviews/<int:review_id>/unpublish', methods=['POST'])
@@ -3958,7 +3963,7 @@ def unpublish_review(review_id):
     review.is_visible = False
     db.session.commit()
     flash('Review unpublished.', 'success')
-    return redirect(url_for('admin_reviews'))
+    return redirect(url_for('admin_dashboard'))
 
 
 @app.route('/admin/reviews')
@@ -4422,6 +4427,18 @@ def admin_user_detail(user_id):
 
 with app.app_context():
     db.create_all()
+
+    # Add display_name column if it doesn't exist (migration for existing DBs)
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+        columns = [col['name'] for col in inspector.get_columns('reviews')]
+        if 'display_name' not in columns:
+            with db.engine.connect() as conn:
+                conn.execute(text('ALTER TABLE reviews ADD COLUMN display_name VARCHAR(255)'))
+                conn.commit()
+    except Exception:
+        pass
 
     # Seed 20 default reviews (only if no reviews exist yet)
     if Review.query.count() == 0:
