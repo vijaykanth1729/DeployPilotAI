@@ -3328,9 +3328,9 @@ def dashboard():
     trend_labels = [s.created_at.strftime('%m/%d') for s in recent_scans]
     trend_data = [s.risk_score for s in recent_scans]
 
-    # Check if user should be prompted to review
+    # Check if user should be prompted to review (only on 1st, 3rd, 5th scans)
     has_reviewed = Review.query.filter_by(user_id=current_user.id).first() is not None
-    show_review_prompt = total_scans >= 1 and not has_reviewed
+    show_review_prompt = not has_reviewed and total_scans > 0 and total_scans % 2 == 1
 
     return render_template('dashboard.html',
                            projects=projects,
