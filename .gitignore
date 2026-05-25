@@ -5,6 +5,7 @@ venv/
 
 # Environment
 .env
+.env.production
 
 # VS Code
 .vscode/
