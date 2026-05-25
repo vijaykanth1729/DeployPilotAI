@@ -1683,164 +1683,276 @@ def detect_file_type(file_path, content=''):
 
 
 def validate_content(content, file_type):
-    """Validate that the content is actually a valid infrastructure config file.
+    """Full parser-based validation for infrastructure config files.
     Returns (is_valid, error_message) tuple."""
     content_stripped = content.strip()
 
-    # Basic checks: must have minimum length and not be gibberish
     if len(content_stripped) < 10:
         return False, 'Content is too short to be a valid configuration file.'
-
-    # Check if content has at least some structure (not just random text)
     lines = [l for l in content_stripped.split('\n') if l.strip()]
-    if len(lines) < 2:
+    if len(lines) < 2 and file_type not in ('arm', 'cloudformation'):
         return False, 'Content must have at least 2 lines to be a valid configuration file.'
 
     if file_type == 'kubernetes':
-        # Must have YAML-like structure: keys at start of lines (with optional indentation)
-        # Valid YAML has "key:" at the beginning of a line (possibly indented)
-        yaml_line_pattern = re.compile(r'^\s*\w[\w\-]*\s*:', re.MULTILINE)
-        yaml_lines_found = len(yaml_line_pattern.findall(content))
-        if yaml_lines_found < 3:
-            return False, 'Invalid Kubernetes YAML: content does not have valid YAML structure. Each key must be on its own line.'
+        return _validate_kubernetes(content)
+    elif file_type == 'terraform':
+        return _validate_terraform(content)
+    elif file_type == 'dockerfile':
+        return _validate_dockerfile(lines)
+    elif file_type == 'cicd':
+        return _validate_cicd(content)
+    elif file_type == 'cloudformation':
+        return _validate_cloudformation(content, content_stripped)
+    elif file_type == 'arm':
+        return _validate_arm(content)
+    elif file_type == 'gcp':
+        return _validate_gcp(content)
+    return True, ''
 
-        # Check that K8s-specific keywords appear at start of their own lines
-        k8s_line_keywords = [
-            r'^\s*apiVersion:', r'^\s*kind:', r'^\s*metadata:', r'^\s*spec:',
-            r'^\s*containers:', r'^\s*image:', r'^\s*ports:', r'^\s*labels:',
-            r'^\s*selector:', r'^\s*replicas:', r'^\s*template:', r'^\s*volumes:',
-            r'^\s*resources:', r'^\s*name:'
-        ]
-        keyword_count = sum(1 for kw in k8s_line_keywords if re.search(kw, content, re.MULTILINE))
-        if keyword_count < 2:
-            return False, 'Invalid Kubernetes YAML: no Kubernetes-specific keywords found (apiVersion, kind, spec, containers, etc.).'
 
-        # Try basic YAML parsing to catch syntax errors
-        try:
+def _validate_kubernetes(content):
+    """Full Kubernetes YAML parser validation."""
+    try:
+        import yaml
+        parsed = yaml.safe_load(content)
+    except ImportError:
+        if sum(1 for kw in ['apiVersion:', 'kind:', 'metadata:', 'spec:'] if kw in content) < 2:
+            return False, 'Invalid Kubernetes YAML: no Kubernetes keywords found.'
+        return True, ''
+    except yaml.YAMLError as e:
+        if hasattr(e, 'problem_mark') and e.problem_mark:
+            m = e.problem_mark
+            return False, f'YAML syntax error at line {m.line+1}, column {m.column+1}: {e.problem}'
+        return False, f'YAML syntax error: {str(e).split(chr(10))[0][:150]}'
+
+    if parsed is None:
+        return False, 'Invalid Kubernetes YAML: file is empty or only comments.'
+    if not isinstance(parsed, dict):
+        return False, 'Invalid Kubernetes YAML: top-level must be a mapping (key: value), not a list or scalar.'
+    if 'apiVersion' not in parsed:
+        return False, 'Invalid Kubernetes YAML: missing required field "apiVersion".'
+    if 'kind' not in parsed:
+        return False, 'Invalid Kubernetes YAML: missing required field "kind".'
+
+    valid_kinds = ['Deployment','Service','Pod','StatefulSet','DaemonSet','Job','CronJob',
+        'ConfigMap','Secret','Ingress','NetworkPolicy','PersistentVolumeClaim',
+        'PersistentVolume','ServiceAccount','Role','RoleBinding','ClusterRole',
+        'ClusterRoleBinding','Namespace','HorizontalPodAutoscaler','ReplicaSet',
+        'LimitRange','ResourceQuota','PodDisruptionBudget','StorageClass',
+        'CustomResourceDefinition','Endpoints','EndpointSlice','List']
+    kind = parsed.get('kind', '')
+    if kind and kind not in valid_kinds:
+        return False, f'Invalid Kubernetes YAML: unrecognized kind "{kind}".'
+
+    if 'metadata' in parsed:
+        if parsed['metadata'] is None:
+            return False, 'Invalid Kubernetes YAML: "metadata:" is empty. Indent child keys (name, labels) under it.'
+        if not isinstance(parsed['metadata'], dict):
+            return False, 'Invalid Kubernetes YAML: "metadata" must be a mapping with "name" field.'
+
+    workload_kinds = ['Deployment','StatefulSet','DaemonSet','Job','CronJob','Pod','ReplicaSet','Service']
+    if kind in workload_kinds:
+        if 'spec' not in parsed:
+            return False, f'Invalid Kubernetes YAML: kind "{kind}" requires a "spec" field.'
+        if parsed.get('spec') is None:
+            return False, 'Invalid Kubernetes YAML: "spec:" is empty. Indent child keys under it.'
+        if not isinstance(parsed.get('spec'), dict):
+            return False, 'Invalid Kubernetes YAML: "spec" must be a mapping.'
+    return True, ''
+
+
+def _validate_terraform(content):
+    """Terraform HCL validation."""
+    try:
+        import hcl2
+        import io
+        hcl2.load(io.StringIO(content))
+        return True, ''
+    except ImportError:
+        pass
+    except Exception as e:
+        return False, f'Invalid Terraform HCL syntax: {str(e)[:150]}'
+
+    has_block = bool(re.search(r'^\s*(resource|variable|output|provider|module|data|terraform|locals)\s', content, re.MULTILINE))
+    has_braces = '{' in content and '}' in content
+    if not has_block and not has_braces:
+        return False, 'Invalid Terraform config: no HCL blocks found (resource, variable, provider, etc.).'
+    if not has_braces:
+        return False, 'Invalid Terraform config: missing block delimiters { }.'
+    if content.count('{') != content.count('}'):
+        return False, f'Invalid Terraform HCL: unbalanced braces — {content.count("{")} open vs {content.count("}")} close.'
+    return True, ''
+
+
+def _validate_dockerfile(lines):
+    """Full Dockerfile instruction validation."""
+    valid_instructions = {'FROM','RUN','CMD','ENTRYPOINT','COPY','ADD','WORKDIR','EXPOSE',
+        'ENV','ARG','VOLUME','USER','LABEL','HEALTHCHECK','SHELL','STOPSIGNAL','ONBUILD','MAINTAINER'}
+    found_from = False
+    found_instruction = False
+    in_continuation = False
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith('#') or not stripped:
+            continue
+        if in_continuation:
+            in_continuation = stripped.endswith('\\')
+            continue
+
+        first_word = stripped.split()[0].upper() if stripped.split() else ''
+        if first_word in valid_instructions:
+            found_instruction = True
+            if first_word == 'FROM':
+                found_from = True
+                if len(stripped.split()) < 2:
+                    return False, f'Dockerfile error line {i+1}: FROM requires an image name.'
+            in_continuation = stripped.endswith('\\')
+        else:
+            if not found_instruction:
+                return False, f'Dockerfile error line {i+1}: "{first_word}" is not a valid instruction. Must start with FROM.'
+            else:
+                return False, f'Dockerfile error line {i+1}: "{first_word}" is not a valid Dockerfile instruction.'
+
+    if not found_instruction:
+        return False, 'Invalid Dockerfile: no valid instructions found.'
+    if not found_from:
+        return False, 'Invalid Dockerfile: missing required FROM instruction.'
+    return True, ''
+
+
+def _validate_cicd(content):
+    """CI/CD pipeline YAML validation (GitHub Actions, GitLab CI)."""
+    try:
+        import yaml
+        parsed = yaml.safe_load(content)
+    except ImportError:
+        if not any(kw in content for kw in ['jobs:', 'steps:', 'stages:', 'pipeline:']):
+            return False, 'Invalid CI/CD config: no pipeline keywords found.'
+        return True, ''
+    except yaml.YAMLError as e:
+        if hasattr(e, 'problem_mark') and e.problem_mark:
+            m = e.problem_mark
+            return False, f'CI/CD YAML syntax error at line {m.line+1}, column {m.column+1}: {e.problem}'
+        return False, f'CI/CD YAML syntax error: {str(e).split(chr(10))[0][:150]}'
+
+    if parsed is None:
+        return False, 'Invalid CI/CD config: file is empty.'
+    if not isinstance(parsed, dict):
+        return False, 'Invalid CI/CD config: top-level must be a mapping.'
+
+    is_gha = 'on' in parsed or 'jobs' in parsed
+    if is_gha:
+        if 'jobs' not in parsed:
+            return False, 'Invalid GitHub Actions: missing required "jobs" section.'
+        if not isinstance(parsed['jobs'], dict):
+            return False, 'Invalid GitHub Actions: "jobs" must be a mapping.'
+        for name, job in parsed['jobs'].items():
+            if not isinstance(job, dict):
+                return False, f'Invalid GitHub Actions: job "{name}" must be a mapping.'
+            if 'runs-on' not in job and 'uses' not in job:
+                return False, f'Invalid GitHub Actions: job "{name}" missing "runs-on".'
+    else:
+        pipeline_keys = ['jobs','steps','stages','pipeline','build','deploy','script']
+        if not any(k in parsed for k in pipeline_keys):
+            return False, 'Invalid CI/CD config: no pipeline structure found (jobs, steps, stages).'
+    return True, ''
+
+
+def _validate_cloudformation(content, content_stripped):
+    """AWS CloudFormation template validation."""
+    parsed = None
+    try:
+        if content_stripped.startswith('{'):
+            parsed = json.loads(content)
+        else:
             import yaml
             parsed = yaml.safe_load(content)
-            # Check semantic structure: metadata and spec should be dicts, not None
-            if isinstance(parsed, dict):
-                if 'metadata' in parsed and parsed['metadata'] is None:
-                    return False, 'Invalid Kubernetes YAML: "metadata:" has no nested content. Check indentation — child keys must be indented under their parent.'
-                if 'spec' in parsed and parsed['spec'] is None:
-                    return False, 'Invalid Kubernetes YAML: "spec:" has no nested content. Check indentation — child keys must be indented under their parent.'
-        except ImportError:
-            pass  # yaml not available, skip parse check
-        except Exception as e:
-            err_str = str(e)
-            # Extract a short meaningful error
-            if 'could not find expected' in err_str or 'mapping values' in err_str or 'did not find expected' in err_str:
-                return False, f'Invalid Kubernetes YAML syntax: {err_str.split(chr(10))[0][:120]}'
+    except json.JSONDecodeError as e:
+        return False, f'CloudFormation JSON syntax error: {str(e)[:150]}'
+    except ImportError:
+        if not any(kw in content for kw in ['AWSTemplateFormatVersion', 'Resources:', 'AWS::']):
+            return False, 'Invalid CloudFormation: no AWS keywords found.'
+        return True, ''
+    except Exception as e:
+        if hasattr(e, 'problem_mark') and e.problem_mark:
+            m = e.problem_mark
+            return False, f'CloudFormation YAML error at line {m.line+1}, column {m.column+1}: {e.problem}'
+        return False, f'CloudFormation syntax error: {str(e).split(chr(10))[0][:150]}'
 
-    elif file_type == 'terraform':
-        # Must have HCL-like structure with blocks or assignments
-        has_hcl_structure = any(kw in content for kw in [
-            'resource ', 'variable ', 'output ', 'provider ', 'module ',
-            'data ', 'terraform ', 'locals ', '= {', '= "', '= var.',
-            'source ', 'backend '
-        ])
-        has_braces = '{' in content and '}' in content
-        if not has_hcl_structure and not has_braces:
-            return False, 'Invalid Terraform config: no HCL structure found (resource, variable, provider blocks, etc.).'
+    if not isinstance(parsed, dict):
+        return False, 'Invalid CloudFormation: top-level must be a mapping.'
+    if 'Resources' not in parsed and 'resources' not in parsed:
+        return False, 'Invalid CloudFormation: missing required "Resources" section.'
+    resources = parsed.get('Resources', parsed.get('resources', {}))
+    if not isinstance(resources, dict):
+        return False, 'Invalid CloudFormation: "Resources" must be a mapping.'
+    for name, res in resources.items():
+        if not isinstance(res, dict):
+            return False, f'CloudFormation: resource "{name}" must be a mapping.'
+        if 'Type' not in res and 'type' not in res:
+            return False, f'CloudFormation: resource "{name}" missing "Type" field.'
+    return True, ''
 
-    elif file_type == 'dockerfile':
-        # Must have Dockerfile instructions
-        dockerfile_instructions = ['FROM', 'RUN', 'CMD', 'ENTRYPOINT', 'COPY', 'ADD',
-                                   'WORKDIR', 'EXPOSE', 'ENV', 'ARG', 'VOLUME', 'USER',
-                                   'LABEL', 'HEALTHCHECK', 'SHELL', 'STOPSIGNAL']
-        has_instruction = any(
-            any(line.strip().upper().startswith(inst) for inst in dockerfile_instructions)
-            for line in lines
-        )
-        if not has_instruction:
-            return False, 'Invalid Dockerfile: no valid Dockerfile instructions found (FROM, RUN, COPY, CMD, etc.).'
-        # Must have FROM as one of the instructions
-        has_from = any(line.strip().upper().startswith('FROM') for line in lines)
-        if not has_from:
-            return False, 'Invalid Dockerfile: missing required FROM instruction.'
 
-    elif file_type == 'cicd':
-        # Must have pipeline-like structure
-        has_cicd_keywords = any(kw in content for kw in [
-            'name:', 'on:', 'jobs:', 'steps:', 'runs-on:', 'uses:',
-            'pipeline:', 'stages:', 'stage:', 'script:', 'image:',
-            'trigger:', 'build:', 'deploy:', 'test:', 'workflow_dispatch',
-            'pull_request:', 'push:', 'schedule:'
-        ])
-        has_yaml_structure = any(':' in line for line in lines[:10])
-        if not has_cicd_keywords:
-            return False, 'Invalid CI/CD config: no pipeline keywords found (jobs, steps, stages, pipeline, etc.).'
-        if not has_yaml_structure:
-            return False, 'Invalid CI/CD config: content does not have valid YAML/pipeline structure.'
-        # Try YAML parsing
-        try:
-            import yaml
-            yaml.safe_load(content)
-        except ImportError:
-            pass
-        except Exception as e:
-            err_str = str(e)
-            if 'could not find expected' in err_str or 'mapping values' in err_str or 'did not find expected' in err_str:
-                return False, f'Invalid CI/CD YAML syntax: {err_str.split(chr(10))[0][:120]}'
+def _validate_arm(content):
+    """Azure ARM template validation."""
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError as e:
+        return False, f'ARM template JSON syntax error: {str(e)[:150]}'
 
-    elif file_type == 'cloudformation':
-        # Must have CloudFormation structure
-        has_cfn_keywords = any(kw in content for kw in [
-            'AWSTemplateFormatVersion', 'Resources:', 'AWS::', 'Type:',
-            'Properties:', 'Parameters:', 'Outputs:', 'Conditions:',
-            'Mappings:', 'Description:'
-        ])
-        if not has_cfn_keywords:
-            return False, 'Invalid CloudFormation template: no AWS CloudFormation keywords found (AWSTemplateFormatVersion, Resources, AWS::, etc.).'
-        # Try parsing (YAML or JSON)
-        try:
-            if content_stripped.startswith('{'):
-                json.loads(content)
-            else:
-                import yaml
-                yaml.safe_load(content)
-        except ImportError:
-            pass
-        except Exception as e:
-            err_str = str(e)
-            return False, f'Invalid CloudFormation template syntax: {str(e).split(chr(10))[0][:120]}'
+    if not isinstance(parsed, dict):
+        return False, 'Invalid ARM template: must be a JSON object.'
+    if '$schema' not in parsed:
+        return False, 'Invalid ARM template: missing required "$schema" field.'
+    if 'contentVersion' not in parsed:
+        return False, 'Invalid ARM template: missing required "contentVersion".'
+    if 'resources' not in parsed:
+        return False, 'Invalid ARM template: missing required "resources" array.'
+    if not isinstance(parsed['resources'], list):
+        return False, 'Invalid ARM template: "resources" must be an array.'
+    for i, res in enumerate(parsed['resources']):
+        if not isinstance(res, dict):
+            return False, f'ARM template: resource[{i}] must be a JSON object.'
+        if 'type' not in res:
+            return False, f'ARM template: resource[{i}] missing "type" field.'
+        if 'apiVersion' not in res:
+            return False, f'ARM template: resource[{i}] missing "apiVersion".'
+        if 'name' not in res:
+            return False, f'ARM template: resource[{i}] missing "name" field.'
+    return True, ''
 
-    elif file_type == 'arm':
-        # Must have ARM template structure — require at least one Azure-specific keyword
-        has_azure_specific = any(kw in content for kw in [
-            '$schema', 'contentVersion', 'Microsoft.', 'dependsOn',
-            'azure', 'armTemplate', 'deploymentTemplate'
-        ])
-        has_structure = any(kw in content for kw in [
-            'resources', 'parameters', 'variables', 'outputs', 'apiVersion'
-        ])
-        has_json_structure = ('{' in content and '}' in content) or (':' in content)
-        if not has_azure_specific:
-            return False, 'Invalid ARM template: no Azure-specific keywords found ($schema, contentVersion, Microsoft.*, etc.).'
-        if not has_structure or not has_json_structure:
-            return False, 'Invalid ARM template: content does not have valid ARM template structure.'
-        # Try JSON parsing
-        try:
-            json.loads(content)
-        except Exception as e:
-            if '{' in content:
-                return False, f'Invalid ARM template JSON syntax: {str(e)[:120]}'
 
-    elif file_type == 'gcp':
-        # Must have GCP Deployment Manager structure
-        # Require at least one GCP-specific keyword (not just generic YAML keys)
-        gcp_specific = any(kw in content for kw in [
-            'compute.v1.', 'storage.v1.', 'sqladmin.v1.', 'container.v1.',
-            'googleapis.com', 'gcp-types/', 'machineType:', 'sourceImage:',
-            'google_compute', 'google_storage', 'google_container'
-        ])
-        has_structure = any(kw in content for kw in ['resources:', 'type:', 'properties:'])
-        if not gcp_specific:
-            return False, 'Invalid GCP config: no GCP-specific keywords found (compute.v1, storage.v1, googleapis.com, gcp-types, etc.).'
-        if not has_structure:
-            return False, 'Invalid GCP config: no deployment structure found (resources, type, properties).'
+def _validate_gcp(content):
+    """GCP Deployment Manager validation."""
+    try:
+        import yaml
+        parsed = yaml.safe_load(content)
+    except ImportError:
+        if not any(kw in content for kw in ['compute.v1.', 'storage.v1.', 'googleapis.com', 'gcp-types/']):
+            return False, 'Invalid GCP config: no GCP keywords found.'
+        return True, ''
+    except yaml.YAMLError as e:
+        if hasattr(e, 'problem_mark') and e.problem_mark:
+            m = e.problem_mark
+            return False, f'GCP config YAML error at line {m.line+1}, column {m.column+1}: {e.problem}'
+        return False, f'GCP config YAML syntax error: {str(e).split(chr(10))[0][:150]}'
 
+    if not isinstance(parsed, dict):
+        return False, 'Invalid GCP config: top-level must be a mapping.'
+    if 'resources' not in parsed:
+        return False, 'Invalid GCP config: missing required "resources" section.'
+    resources = parsed.get('resources', [])
+    if not isinstance(resources, list):
+        return False, 'Invalid GCP config: "resources" must be a list.'
+    for i, res in enumerate(resources):
+        if not isinstance(res, dict):
+            return False, f'GCP config: resource[{i}] must be a mapping.'
+        if 'type' not in res:
+            return False, f'GCP config: resource[{i}] missing "type" field.'
+        if 'name' not in res:
+            return False, f'GCP config: resource[{i}] missing "name" field.'
     return True, ''
 
 

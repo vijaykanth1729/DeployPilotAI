@@ -6,3 +6,4 @@ python-dotenv==1.0.0
 gunicorn==21.2.0
 fpdf2==2.8.1
 PyYAML==6.0.1
+python-hcl2==4.3.2
